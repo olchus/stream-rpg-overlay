@@ -1,0 +1,12 @@
+body { margin: 0; background: transparent; font-family: Arial, sans-serif; }
+#root { width: 520px; padding: 14px; }
+.title { font-weight: 700; opacity: .9; margin-bottom: 8px; }
+.boss, .hits { background: rgba(0,0,0,.55); border-radius: 14px; padding: 12px; margin-bottom: 10px; }
+.hp { font-size: 20px; margin-bottom: 8px; }
+.bar { height: 14px; background: rgba(255,255,255,.15); border-radius: 999px; overflow: hidden; }
+.barFill { height: 100%; width: 50%; background: rgba(255,255,255,.85); border-radius: 999px; transition: width .25s linear; }
+
+.hit { display:flex; gap:8px; font-size: 14px; opacity:.95; margin: 6px 0; }
+.by { font-weight: 700; }
+.amt { font-weight: 700; }
+.src { opacity:.7; }
