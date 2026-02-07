@@ -1,10 +1,10 @@
 services:
   app:
-    build: ./server
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
-      - PORT=3000
-      - STREAMLABS_SOCKET_TOKEN=${STREAMLABS_SOCKET_TOKEN}
-      - KICK_CHANNEL=${KICK_CHANNEL}
+      - .env
     restart: unless-stopped
