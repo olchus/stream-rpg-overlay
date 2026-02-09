@@ -24,3 +24,8 @@ data/
 .DS_Store
 .vscode/
 .idea/
+
+# ssh keys
+.ssh/
+USERPROFILE.sshstream-rpg
+USERPROFILE.sshstream-rpg.pub

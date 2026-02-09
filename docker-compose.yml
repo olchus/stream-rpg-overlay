@@ -1,5 +1,4 @@
-services:
-  app:
+  app-dev:
     build:
       context: .
       dockerfile: Dockerfile
@@ -8,5 +7,8 @@ services:
     env_file:
       - .env
     volumes:
+      - ./server:/app/server
+      - ./overlay:/app/overlay
       - ./data:/app/data
+    command: ["node", "server/src/index.js"]
     restart: unless-stopped

@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Stream RPG Boss</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="root">
+      <div class="card">
+        <div class="row">
+          <div class="title">RAID BOSS</div>
+          <div class="phase" id="phase">PHASE 1</div>
+        </div>
+        <div class="hp" id="hpText">HP: --</div>
+        <div class="bar">
+          <div class="barFill" id="barFill"></div>
+        </div>
+        <div class="toast" id="toast"></div>
+        <div class="chaos" id="chaos"></div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="title">LAST HITS</div>
+          <div id="hits"></div>
+        </div>
+
+        <div class="card">
+          <div class="title">LEADERBOARD (DMG TODAY)</div>
+          <div id="topDmg"></div>
+          <div class="sep"></div>
+          <div class="title">TOP XP</div>
+          <div id="topXp"></div>
+        </div>
+      </div>
+
+      <div class="hint">
+        Kick: <b>!attack</b> (cooldown) / <b>!heal</b> 😈
+      </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="./overlay.js"></script>
+  </body>
+</html>
