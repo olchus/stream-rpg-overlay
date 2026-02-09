@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+.env
+.env.*
+.git
+.gitignore
+Dockerfile
+docker-compose.yml
+data
+*.sqlite
+*.sqlite3
+dist
+**/dist
+.vscode
+.idea

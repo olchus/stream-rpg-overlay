@@ -1,5 +1,17 @@
 {
+  "name": "stream-rpg-overlay",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server/src/index.js",
+    "start": "node server/src/index.js"
+  },
   "dependencies": {
-    "@retconned/kick-js": "^0.5.4"
+    "better-sqlite3": "^11.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5",
+    "@retconned/kick-js": "^1.3.0"
   }
 }
