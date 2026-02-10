@@ -17,8 +17,10 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run
+    # share network namespace with app to avoid DNS issues resolving "app"
+    network_mode: "service:app"
     environment:
-      - TUNNEL_TOKEN=eyJhIjoiZDEzOTBmZDZhODA1ZjYyOGEzMDYzOTMwOWUzOTk3YTMiLCJ0IjoiZmZkYWJmZTYtODhlMy00NGFkLTgzMWYtY2FmYjQzNmEzYTdlIiwicyI6Ik5UVmhOVE14WkdFdFpqRTNZUzAwTURBeUxXSXlZMll0T1RJM1lUaGpZelE1TW1ZeiJ9
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
     restart: unless-stopped
     depends_on:
       - app
