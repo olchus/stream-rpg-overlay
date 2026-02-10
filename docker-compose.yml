@@ -54,6 +54,14 @@ services:
     ports:
       - "3000:3000"
     restart: unless-stopped
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=eyJhIjoiZDEzOTBmZDZhODA1ZjYyOGEzMDYzOTMwOWUzOTk3YTMiLCJ0IjoiZmZkYWJmZTYtODhlMy00NGFkLTgzMWYtY2FmYjQzNmEzYTdlIiwicyI6IlpEUTBaV1V4T1RrdE5EYzVNUzAwTjJWbUxUbGpZamd0T0dJNFpqaG1aRFpqTnpBMCJ9
+    restart: unless-stopped
+    depends_on:
+      - app
 
 volumes:
   app_node_modules:
