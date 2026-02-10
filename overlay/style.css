@@ -105,7 +105,7 @@ body {
 .sep { height: 1px; background: var(--stroke); margin: 10px 0; }
 .muted { opacity: .65; font-size: 14px; }
 
-.hint { margin-top: 10px; font-size: 13px; opacity: .75; }
+.hint { margin-top: 10px; font-size: 13px; opacity: .95; }
 
 body[data-phase="2"] .barFill { filter: brightness(1.05); }
 body[data-phase="3"] .barFill { filter: brightness(1.12); }

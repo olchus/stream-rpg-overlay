@@ -9,6 +9,7 @@ import { Server } from "socket.io";
 import { initDb } from "./db.js";
 import { createGameState, applyDamage, awardXp, maybeChaos } from "./game.js";
 import { connectStreamlabs } from "./streamlabs.js";
+import { registerTipplyWebhook, startTipplyGoalPoller } from "./tipply.js";
 import {
   buildAuthorizeUrl,
   buildStreamlabsAuth,
@@ -63,6 +64,7 @@ const DAILY_CLEANUP_HOURS = 48; // ile trzymać eventy w bazie
 
 const app = express();
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 const oauthStates = new Set();
 
 function newOauthState() {
@@ -202,6 +204,24 @@ registerWebhooks(app, {
   state,
   auth,
   db: dbh,
+  broadcastState,
+  updateUser,
+  recordEvent,
+  getLeaderboards
+});
+
+registerTipplyWebhook(app, {
+  env,
+  state,
+  broadcastState,
+  updateUser,
+  recordEvent,
+  getLeaderboards
+});
+
+startTipplyGoalPoller({
+  env,
+  state,
   broadcastState,
   updateUser,
   recordEvent,
