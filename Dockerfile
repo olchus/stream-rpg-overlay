@@ -18,5 +18,9 @@ RUN npm ci || npm install
 COPY server ./server
 COPY overlay ./overlay
 
+# run as non-root for puppeteer/chromium sandbox
+RUN mkdir -p /app/data && chown -R node:node /app
+USER node
+
 EXPOSE 3001
 CMD ["node", "server/src/index.js"]
