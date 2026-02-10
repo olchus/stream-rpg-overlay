@@ -55,7 +55,7 @@ const FOLLOW_DAMAGE = safeInt(env.FOLLOW_DAMAGE, 20);
 const SUB_DAMAGE = safeInt(env.SUB_DAMAGE, 150);
 const DONATE_DMG_MULT = safeInt(env.DONATE_DMG_MULT, 10);
 
-const CHAT_ATTACK_COOLDOWN_MS = safeInt(env.CHAT_ATTACK_COOLDOWN_MS, 5000);
+const CHAT_ATTACK_COOLDOWN_MS = safeInt(env.CHAT_ATTACK_COOLDOWN_MS, 60000);
 
 const CHAOS_ENABLED = (env.CHAOS_ENABLED || "true").toLowerCase() === "true";
 const CHAOS_DONATE_THRESHOLD = safeInt(env.CHAOS_DONATE_THRESHOLD, 10);

@@ -1,4 +1,4 @@
-import { normalizeUsername, safeInt, clamp } from "./util.js";
+import { normalizeUsername, safeInt, clamp, nowMs } from "./util.js";
 import { applyDamage, maybeChaos } from "./game.js";
 import { canRun } from "./auth.js";
 
@@ -47,8 +47,16 @@ export function handleCommand(ctx) {
   if (cmd === "attack") {
     const dmgBase = safeInt(ctx.env.CHAT_ATTACK_DAMAGE, 5);
     const dmg = clamp(dmgBase, 1, 9999);
+    const cooldownMs = safeInt(ctx.env.CHAT_ATTACK_COOLDOWN_MS, 60000);
+    const now = nowMs();
+    const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
+    const lastAttackMs = row?.last_attack_ms ?? 0;
 
-    ctx.updateUser(user, 2);
+    if (now - lastAttackMs < cooldownMs) {
+      return { ok: false, silent: true };
+    }
+
+    ctx.updateUser(user, 2, now);
     ctx.recordEvent(user, "chat_attack", dmg, "cloudbot");
     applyDamage(ctx.state, user, dmg, "cloudbot_attack");
 
