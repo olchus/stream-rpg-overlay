@@ -10,7 +10,7 @@ function parseArgs(text) {
 
 export function handleCommand(ctx) {
   // ctx:
-  // { user, role, rawText, state, env, dbFns, broadcastState, recordEvent, updateUser, getLeaderboards, auth }
+  // { user, role, rawText, state, env, db, broadcastState, recordEvent, updateUser, getLeaderboards, auth }
 //console.log("[cmd]", { user: ctx.user, role: ctx.role, rawText: ctx.rawText });
   const userRaw = ctx?.userRaw ?? ctx?.user ?? "";
   const cmdRaw = ctx?.cmdRaw ?? ctx?.rawText ?? "";
@@ -80,6 +80,9 @@ export function handleCommand(ctx) {
     adminCmd === "pause" ? "pause" :
     adminCmd === "resume" ? "resume" :
     adminCmd === "setmult" ? "setmult" :
+    adminCmd === "clearhits" ? "clearhits" :
+    adminCmd === "resetxp" ? "resetxp" :
+    adminCmd === "resetall" ? "resetall" :
     "";
 
   if (authKey) {
@@ -132,6 +135,37 @@ export function handleCommand(ctx) {
       ctx.state.runtimeOverrides[key] = val;
       ctx.broadcastState({ toast: `MULT ${key}=${val} by ${user}` });
       return { ok: true };
+    }
+
+    if (authKey === "clearhits") {
+      ctx.state.lastHits = [];
+      ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `HITS cleared by ${user}` });
+      return { ok: true };
+    }
+
+    if (authKey === "resetxp") {
+      if (!ctx.db?.db) return { ok: false, message: "db missing" };
+      try {
+        ctx.db.db.exec("UPDATE users SET xp=0, level=1, last_attack_ms=0;");
+        ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `XP reset by ${user}` });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: "db error" };
+      }
+    }
+
+    if (authKey === "resetall") {
+      if (!ctx.db?.db) return { ok: false, message: "db missing" };
+      try {
+        ctx.state.bossHp = ctx.state.bossMaxHp;
+        ctx.state.phase = 1;
+        ctx.state.lastHits = [];
+        ctx.db.db.exec("DELETE FROM events; UPDATE users SET xp=0, level=1, last_attack_ms=0;");
+        ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `RESET ALL by ${user}` });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, message: "db error" };
+      }
     }
   }
 

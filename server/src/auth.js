@@ -24,7 +24,18 @@ export function canRun(command, user, role, auth) {
   // role: viewer|mod|admin
 
   // Admin-only
-  const adminOnly = new Set(["reset", "sethp", "phase", "pause", "resume", "setmult", "shutdown"]);
+  const adminOnly = new Set([
+    "reset",
+    "sethp",
+    "phase",
+    "pause",
+    "resume",
+    "setmult",
+    "clearhits",
+    "resetxp",
+    "resetall",
+    "shutdown"
+  ]);
   // Mod lub admin
   const modOrAdmin = new Set(["pause", "resume"]);
 
