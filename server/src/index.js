@@ -1,5 +1,8 @@
 import "dotenv/config";
 import express from "express";
+import crypto from "crypto";
+import { handleCommand } from "./commands.js";
+import { buildAuth, roleFromCloudbotLevel } from "./auth.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
 
@@ -8,8 +11,12 @@ import { createGameState, applyDamage, awardXp, maybeChaos } from "./game.js";
 import { connectStreamlabs } from "./streamlabs.js";
 import { connectKick } from "./kick.js";
 import { nowMs, safeInt, normalizeUsername } from "./util.js";
+import { registerWebhooks } from "./webhooks.js";
+
 
 const env = process.env;
+const auth = buildAuth(env);
+const CLOUDBOT_WEBHOOK_SECRET = env.CLOUDBOT_WEBHOOK_SECRET || "";
 
 const PORT = safeInt(env.PORT, 3000);
 
@@ -31,11 +38,14 @@ const CHAOS_DONATE_THRESHOLD = safeInt(env.CHAOS_DONATE_THRESHOLD, 10);
 const DAILY_CLEANUP_HOURS = 48; // ile trzymać eventy w bazie
 
 const app = express();
+app.use(express.json());
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: "*" } });
 
 const dbh = initDb();
 const state = createGameState({ BOSS_MAX_HP });
+state.paused = false;
+state.chaosForced = null; // null = normal, true/false = forced
 
 function broadcastState(extra = {}) {
   io.emit("state", {
@@ -97,6 +107,17 @@ app.get("/api/state", (_req, res) => {
   res.json({ ...state, leaderboards: getLeaderboards() });
 });
 
+registerWebhooks(app, {
+  env,
+  state,
+  auth,
+  broadcastState,
+  updateUser,
+  recordEvent,
+  getLeaderboards
+});
+
+
 io.on("connection", (socket) => {
   socket.emit("state", { ...state, leaderboards: getLeaderboards() });
 });
@@ -147,6 +168,7 @@ function handleKickMessage({ user, text }) {
 
 // ----- Streamlabs events -----
 function handleStreamlabsEvent(data) {
+  if (state.paused) return;
   const type = data?.type;
   const msg = data?.message?.[0] || {};
 

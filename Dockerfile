@@ -11,5 +11,5 @@ RUN npm ci || npm install
 COPY server ./server
 COPY overlay ./overlay
 
-EXPOSE 3000
+EXPOSE 3001
 CMD ["node", "server/src/index.js"]
