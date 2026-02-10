@@ -16,7 +16,7 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate --protocol http2 run
+    command: tunnel --no-autoupdate --protocol http2 --loglevel debug run
     # share network namespace with app to avoid DNS issues resolving "app"
     network_mode: "service:app"
     environment:
