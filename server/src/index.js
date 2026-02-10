@@ -35,6 +35,18 @@ const PORT = safeInt(env.PORT, 3001);
 const STREAMLABS_SOCKET_TOKEN = env.STREAMLABS_SOCKET_TOKEN || "";
 const KICK_CHANNEL = env.KICK_CHANNEL || "";
 const KICK_ENABLED = (env.KICK_ENABLED || "true").toLowerCase() === "true";
+const KICK_ADMIN_USERS = new Set(
+  String(env.KICK_ADMIN_USERS || "")
+    .split(",")
+    .map((s) => normalizeUsername(s))
+    .filter(Boolean)
+);
+const KICK_MOD_USERS = new Set(
+  String(env.KICK_MOD_USERS || "")
+    .split(",")
+    .map((s) => normalizeUsername(s))
+    .filter(Boolean)
+);
 
 const BOSS_MAX_HP = safeInt(env.BOSS_MAX_HP, 5000);
 const CHAT_ATTACK_DAMAGE = safeInt(env.CHAT_ATTACK_DAMAGE, 5);
@@ -74,6 +86,14 @@ function broadcastState(extra = {}) {
     ...state,
     ...extra
   });
+}
+
+function roleFromKickUser(userRaw) {
+  const u = normalizeUsername(userRaw);
+  if (!u) return "viewer";
+  if (u === auth.admin || KICK_ADMIN_USERS.has(u)) return "admin";
+  if (KICK_MOD_USERS.has(u)) return "mod";
+  return "viewer";
 }
 
 function ensureUser(usernameRaw) {
@@ -197,6 +217,7 @@ function handleKickMessage({ user, text }) {
   const t = String(text || "").trim();
 
   if (!t.startsWith("!")) return;
+  const role = roleFromKickUser(user);
 
   if (t === "!attack") {
     const u = ensureUser(user);
@@ -233,7 +254,29 @@ function handleKickMessage({ user, text }) {
     const u = ensureUser(user);
     // overlay doesn't show chat replies; you can later add "bot message" to Kick
     recordEvent(u.username, "chat_stats", 0, "kick");
+    return;
   }
+
+  // Other commands (admin/mod) via shared handler
+  const result = handleCommand({
+    user,
+    role,
+    rawText: t,
+    userRaw: user,
+    roleRaw: role,
+    cmdRaw: t,
+    eventId: crypto.randomUUID(),
+    source: "kick",
+    state,
+    env,
+    auth,
+    updateUser,
+    recordEvent,
+    getLeaderboards,
+    broadcastState
+  });
+
+  if (result?.ok) return;
 }
 
 // ----- Streamlabs events -----
