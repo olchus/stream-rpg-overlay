@@ -9,6 +9,15 @@ import { Server } from "socket.io";
 import { initDb } from "./db.js";
 import { createGameState, applyDamage, awardXp, maybeChaos } from "./game.js";
 import { connectStreamlabs } from "./streamlabs.js";
+import {
+  buildAuthorizeUrl,
+  buildStreamlabsAuth,
+  exchangeCodeForToken,
+  fetchSocketToken,
+  hasStreamlabsAuth,
+  loadStreamlabsToken,
+  saveStreamlabsToken
+} from "./streamlabsAuth.js";
 import { connectKick } from "./kick.js";
 import { nowMs, safeInt, normalizeUsername } from "./util.js";
 import { registerWebhooks } from "./webhooks.js";
@@ -19,6 +28,7 @@ import { fileURLToPath } from "url";
 const env = process.env;
 const auth = buildAuth(env);
 const CLOUDBOT_WEBHOOK_SECRET = env.CLOUDBOT_WEBHOOK_SECRET || "";
+const streamlabsAuth = buildStreamlabsAuth(env);
 
 const PORT = safeInt(env.PORT, 3001);
 
@@ -41,6 +51,15 @@ const DAILY_CLEANUP_HOURS = 48; // ile trzymać eventy w bazie
 
 const app = express();
 app.use(express.json());
+const oauthStates = new Set();
+
+function newOauthState() {
+  const s = crypto.randomUUID();
+  oauthStates.add(s);
+  const t = setTimeout(() => oauthStates.delete(s), 10 * 60 * 1000);
+  if (t.unref) t.unref();
+  return s;
+}
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: "*" } });
 
@@ -48,6 +67,7 @@ const dbh = initDb();
 const state = createGameState({ BOSS_MAX_HP });
 state.paused = false;
 state.chaosForced = null; // null = normal, true/false = forced
+let streamlabsClient = null;
 
 function broadcastState(extra = {}) {
   io.emit("state", {
@@ -111,6 +131,50 @@ app.get("/health", (_req, res) => {
 // Debug endpoint (optional)
 app.get("/api/state", (_req, res) => {
   res.json({ ...state, leaderboards: getLeaderboards() });
+});
+
+// Streamlabs OAuth (authorize app to get socket token)
+app.get("/auth/streamlabs/start", (_req, res) => {
+  if (!hasStreamlabsAuth(streamlabsAuth)) {
+    return res.status(500).json({ ok: false, error: "missing streamlabs oauth config" });
+  }
+
+  const state = newOauthState();
+  const url = buildAuthorizeUrl(streamlabsAuth, state);
+  return res.redirect(url);
+});
+
+app.get("/auth/streamlabs/callback", async (req, res) => {
+  if (!hasStreamlabsAuth(streamlabsAuth)) {
+    return res.status(500).json({ ok: false, error: "missing streamlabs oauth config" });
+  }
+
+  const code = String(req.query?.code || "");
+  const state = String(req.query?.state || "");
+  if (!code) return res.status(400).json({ ok: false, error: "missing code" });
+  if (state && !oauthStates.has(state)) {
+    return res.status(400).json({ ok: false, error: "invalid state" });
+  }
+  if (state) oauthStates.delete(state);
+
+  try {
+    const token = await exchangeCodeForToken(streamlabsAuth, code);
+    saveStreamlabsToken(env, { ...token, acquired_at_ms: Date.now() });
+
+    let socketConnected = false;
+    try {
+      const socketToken = await fetchSocketToken(token.access_token);
+      connectStreamlabsWithToken(socketToken, "oauth");
+      socketConnected = true;
+    } catch (e) {
+      console.log("[streamlabs] socket token error:", e?.message || e);
+    }
+
+    return res.json({ ok: true, socketConnected });
+  } catch (e) {
+    console.log("[streamlabs] oauth error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
 });
 
 registerWebhooks(app, {
@@ -233,7 +297,47 @@ function handleStreamlabsEvent(data) {
   }
 }
 
-connectStreamlabs(STREAMLABS_SOCKET_TOKEN, handleStreamlabsEvent);
+function disconnectStreamlabsClient() {
+  if (!streamlabsClient) return;
+  if (typeof streamlabsClient.disconnect === "function") streamlabsClient.disconnect();
+  else if (typeof streamlabsClient.close === "function") streamlabsClient.close();
+  streamlabsClient = null;
+}
+
+function connectStreamlabsWithToken(socketToken, source = "unknown") {
+  if (!socketToken) {
+    console.log(`[streamlabs] socket token missing (source=${source})`);
+    return;
+  }
+  disconnectStreamlabsClient();
+  streamlabsClient = connectStreamlabs(socketToken, handleStreamlabsEvent);
+}
+
+async function resolveStreamlabsSocketToken() {
+  if (STREAMLABS_SOCKET_TOKEN) {
+    return { token: STREAMLABS_SOCKET_TOKEN, source: "env" };
+  }
+
+  const stored = loadStreamlabsToken(env);
+  if (stored?.access_token) {
+    try {
+      const token = await fetchSocketToken(stored.access_token);
+      return { token, source: "oauth" };
+    } catch (e) {
+      console.log("[streamlabs] socket token error:", e?.message || e);
+    }
+  }
+
+  return { token: "", source: "none" };
+}
+
+(async () => {
+  const { token, source } = await resolveStreamlabsSocketToken();
+  if (!token && hasStreamlabsAuth(streamlabsAuth)) {
+    console.log("[streamlabs] authorize at /auth/streamlabs/start");
+  }
+  connectStreamlabsWithToken(token, source);
+})();
 
 if (KICK_ENABLED && KICK_CHANNEL) {
   (async () => {
