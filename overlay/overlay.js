@@ -24,6 +24,7 @@ socket.on("state", (s) => {
 
   // last hits
   hits.innerHTML = (s.lastHits || [])
+    .slice(0, 5)
     .map(h => `<div class="hit">
         <span class="by">${esc(h.by)}</span>
         <span class="amt">-${h.amount}</span>

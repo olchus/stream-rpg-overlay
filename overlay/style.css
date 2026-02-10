@@ -1,8 +1,8 @@
 :root {
   --bg: rgba(0,0,0,.58);
-  --txt: rgba(255,255,255,.92);
+  --txt: rgba(0,255,18,.92);
   --muted: rgba(255,255,255,.65);
-  --card: rgba(0,0,0,.55);
+  --card: rgba(0,0,0,.85);
   --stroke: rgba(255,255,255,.12);
 }
 
@@ -13,7 +13,7 @@ body {
   font-family: Arial, sans-serif;
 }
 
-#root { width: 100%; max-width: 500px; padding: 14px; }
+#root { width: 320px; max-width: 500px; padding: 14px; }
 
 .card {
   background: var(--card);
