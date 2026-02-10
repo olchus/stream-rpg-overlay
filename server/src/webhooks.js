@@ -29,7 +29,7 @@ export function registerWebhooks(app, deps) {
   app.post("/api/cmd", (req, res) => {
     if (!secret) return res.status(500).json({ ok: false, error: "missing secret" });
 
-    const sig = req.header("x-cloudbot-secret") || "";
+    const sig = req.header("x-cloudbot-secret") || req.query?.secret || "";
     if (!timingSafeEq(sig, secret)) {
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }

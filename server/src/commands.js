@@ -11,7 +11,7 @@ function parseArgs(text) {
 export function handleCommand(ctx) {
   // ctx:
   // { user, role, rawText, state, env, dbFns, broadcastState, recordEvent, updateUser, getLeaderboards, auth }
-
+//console.log("[cmd]", { user: ctx.user, role: ctx.role, rawText: ctx.rawText });
   const user = normalizeUsername(ctx.user);
   const { cmd, args } = parseArgs(ctx.rawText);
 

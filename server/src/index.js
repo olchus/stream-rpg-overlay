@@ -12,13 +12,15 @@ import { connectStreamlabs } from "./streamlabs.js";
 import { connectKick } from "./kick.js";
 import { nowMs, safeInt, normalizeUsername } from "./util.js";
 import { registerWebhooks } from "./webhooks.js";
+import path from "path";
+import { fileURLToPath } from "url";
 
 
 const env = process.env;
 const auth = buildAuth(env);
 const CLOUDBOT_WEBHOOK_SECRET = env.CLOUDBOT_WEBHOOK_SECRET || "";
 
-const PORT = safeInt(env.PORT, 3000);
+const PORT = safeInt(env.PORT, 3001);
 
 const STREAMLABS_SOCKET_TOKEN = env.STREAMLABS_SOCKET_TOKEN || "";
 const KICK_CHANNEL = env.KICK_CHANNEL || "";
@@ -95,7 +97,11 @@ function getLeaderboards() {
 }
 
 // Serve overlay as static
-app.use("/overlay", express.static("/app/overlay"));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const overlayDir = path.join(__dirname, "..", "..", "overlay");
+app.use("/overlay", express.static(overlayDir));
 
 // Health endpoint
 app.get("/health", (_req, res) => {
