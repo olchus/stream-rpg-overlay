@@ -25,7 +25,7 @@ body {
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid: none;
   gap: 10px;
   margin-top: 10px;
 }
