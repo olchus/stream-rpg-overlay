@@ -37,7 +37,7 @@ export function canRun(command, user, role, auth) {
     "shutdown"
   ]);
   // Mod lub admin
-  const modOrAdmin = new Set(["pause", "resume"]);
+  const modOrAdmin = new Set(["pause", "resume", "maybechaos"]);
 
   if (adminOnly.has(command)) return role === "admin" || isAdmin(user, auth);
   if (modOrAdmin.has(command)) return role === "mod" || role === "admin" || isAdmin(user, auth);

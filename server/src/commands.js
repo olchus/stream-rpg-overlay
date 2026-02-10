@@ -1,5 +1,5 @@
 import { normalizeUsername, safeInt, clamp } from "./util.js";
-import { applyDamage } from "./game.js";
+import { applyDamage, maybeChaos } from "./game.js";
 import { canRun } from "./auth.js";
 
 function parseArgs(text) {
@@ -80,6 +80,7 @@ export function handleCommand(ctx) {
     adminCmd === "pause" ? "pause" :
     adminCmd === "resume" ? "resume" :
     adminCmd === "setmult" ? "setmult" :
+    adminCmd === "maybechaos" ? "maybechaos" :
     adminCmd === "clearhits" ? "clearhits" :
     adminCmd === "resetxp" ? "resetxp" :
     adminCmd === "resetall" ? "resetall" :
@@ -134,6 +135,12 @@ export function handleCommand(ctx) {
 
       ctx.state.runtimeOverrides[key] = val;
       ctx.broadcastState({ toast: `MULT ${key}=${val} by ${user}` });
+      return { ok: true };
+    }
+
+    if (authKey === "maybechaos") {
+      const chaos = maybeChaos(ctx.state, true, 0, 1);
+      ctx.broadcastState({ chaos, toast: `CHAOS by ${user}` });
       return { ok: true };
     }
 
