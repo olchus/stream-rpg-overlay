@@ -24,7 +24,7 @@ socket.on("state", (s) => {
 
   // last hits
   hits.innerHTML = (s.lastHits || [])
-    .slice(0, 5)
+    .slice(0, 3)
     .map(h => `<div class="hit">
         <span class="by">${esc(h.by)}</span>
         <span class="amt">-${h.amount}</span>
@@ -47,11 +47,11 @@ socket.on("state", (s) => {
   const xp = lbs.topXp || [];
 
   topDmg.innerHTML = dmg.length
-    ? dmg.map((r, i) => `<div class="lb"><span class="rank">#${i+1}</span><span class="name">${esc(r.username)}</span><span class="val">${r.dmg}</span></div>`).join("")
+    ? dmg.slice(0, 5).map((r, i) => `<div class="lb"><span class="rank">#${i+1}</span><span class="name">${esc(r.username)}</span><span class="val">${r.dmg}</span></div>`).join("")
     : `<div class="muted">no data yet</div>`;
 
   topXp.innerHTML = xp.length
-    ? xp.map((r, i) => `<div class="lb"><span class="rank">#${i+1}</span><span class="name">${esc(r.username)}</span><span class="val">lvl ${r.level} / ${r.xp}xp</span></div>`).join("")
+    ? xp.slice(0, 5).map((r, i) => `<div class="lb"><span class="rank">#${i+1}</span><span class="name">${esc(r.username)}</span><span class="val">lvl ${r.level} / ${r.xp}xp</span></div>`).join("")
     : `<div class="muted">no data yet</div>`;
 });
 

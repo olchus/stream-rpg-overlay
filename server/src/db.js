@@ -16,7 +16,8 @@ export function initDb() {
       username TEXT PRIMARY KEY,
       xp INTEGER NOT NULL DEFAULT 0,
       level INTEGER NOT NULL DEFAULT 1,
-      last_attack_ms INTEGER NOT NULL DEFAULT 0
+      last_attack_ms INTEGER NOT NULL DEFAULT 0,
+      last_heal_ms INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS events (
@@ -31,16 +32,22 @@ export function initDb() {
     CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts_ms);
   `);
 
+  const userColumns = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
+  if (!userColumns.includes("last_heal_ms")) {
+    db.exec("ALTER TABLE users ADD COLUMN last_heal_ms INTEGER NOT NULL DEFAULT 0;");
+  }
+
   const upsertUser = db.prepare(`
-    INSERT INTO users (username, xp, level, last_attack_ms)
-    VALUES (@username, @xp, @level, @last_attack_ms)
+    INSERT INTO users (username, xp, level, last_attack_ms, last_heal_ms)
+    VALUES (@username, @xp, @level, @last_attack_ms, @last_heal_ms)
     ON CONFLICT(username) DO UPDATE SET
       xp=excluded.xp,
       level=excluded.level,
-      last_attack_ms=excluded.last_attack_ms
+      last_attack_ms=excluded.last_attack_ms,
+      last_heal_ms=excluded.last_heal_ms
   `);
 
-  const getUser = db.prepare(`SELECT username, xp, level, last_attack_ms FROM users WHERE username=?`);
+  const getUser = db.prepare(`SELECT username, xp, level, last_attack_ms, last_heal_ms FROM users WHERE username=?`);
 
   const setLastAttack = db.prepare(`UPDATE users SET last_attack_ms=? WHERE username=?`);
 

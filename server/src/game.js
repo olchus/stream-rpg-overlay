@@ -1,5 +1,12 @@
 import { clamp, nowMs, pickRandom, safeInt, normalizeUsername } from "./util.js";
 
+const PHASE_HP_STEP = 2000;
+
+function maxHpForPhase(baseHp, phase) {
+  const p = Math.max(1, safeInt(phase, 1));
+  return baseHp + (p - 1) * PHASE_HP_STEP;
+}
+
 function computeLevelFromXp(xp) {
   // prosta krzywa: lvl rośnie co 100xp + rosnący próg
   // możesz później zmienić bez ruszania reszty
@@ -15,10 +22,11 @@ function computeLevelFromXp(xp) {
 }
 
 export function createGameState(env) {
-  const bossMax = safeInt(env.BOSS_MAX_HP, 5000);
+  const bossBase = safeInt(env.BOSS_MAX_HP, 5000);
   return {
-    bossMaxHp: bossMax,
-    bossHp: bossMax,
+    bossBaseHp: bossBase,
+    bossMaxHp: bossBase,
+    bossHp: bossBase,
     phase: 1,
     lastHits: [], // {by, amount, source, ts}
     chaosLast: null, // {kind, ts, text}
@@ -26,11 +34,14 @@ export function createGameState(env) {
   };
 }
 
-export function bossPhaseFor(hpPct) {
-  if (hpPct <= 0.10) return 4;
-  if (hpPct <= 0.40) return 3;
-  if (hpPct <= 0.70) return 2;
-  return 1;
+export function setBossPhase(state, phase) {
+  const base = safeInt(state.bossBaseHp ?? state.bossMaxHp, 1);
+  const p = Math.max(1, safeInt(phase, 1));
+  const maxHp = maxHpForPhase(base, p);
+  state.bossBaseHp = base;
+  state.phase = p;
+  state.bossMaxHp = maxHp;
+  state.bossHp = maxHp;
 }
 
 export function applyDamage(state, byRaw, amountRaw, source) {
@@ -39,17 +50,14 @@ export function applyDamage(state, byRaw, amountRaw, source) {
 
   state.bossHp = clamp(state.bossHp - amount, 0, state.bossMaxHp);
 
-  const hpPct = state.bossHp / state.bossMaxHp;
-  state.phase = bossPhaseFor(hpPct);
-
   state.lastHits.unshift({ by, amount, source, ts: nowMs() });
   state.lastHits = state.lastHits.slice(0, 10);
 
-  // boss defeated -> reset
+  // boss defeated -> next phase
   if (state.bossHp === 0) {
-    state.lastHits.unshift({ by: "SYSTEM", amount: 0, source: "BOSS_DEFEATED → RESET", ts: nowMs() });
-    state.bossHp = state.bossMaxHp;
-    state.phase = 1;
+    const nextPhase = Math.max(1, safeInt(state.phase, 1)) + 1;
+    setBossPhase(state, nextPhase);
+    state.lastHits.unshift({ by: "SYSTEM", amount: 0, source: `BOSS DEFEATED -> PHASE ${nextPhase}`, ts: nowMs() });
     state.lastHits = state.lastHits.slice(0, 10);
     return { defeated: true };
   }

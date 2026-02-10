@@ -56,6 +56,7 @@ const SUB_DAMAGE = safeInt(env.SUB_DAMAGE, 150);
 const DONATE_DMG_MULT = safeInt(env.DONATE_DMG_MULT, 10);
 
 const CHAT_ATTACK_COOLDOWN_MS = safeInt(env.CHAT_ATTACK_COOLDOWN_MS, 60000);
+const CHAT_HEAL_COOLDOWN_MS = safeInt(env.CHAT_HEAL_COOLDOWN_MS, 120000);
 
 const CHAOS_ENABLED = (env.CHAOS_ENABLED || "true").toLowerCase() === "true";
 const CHAOS_DONATE_THRESHOLD = safeInt(env.CHAOS_DONATE_THRESHOLD, 10);
@@ -102,25 +103,27 @@ function ensureUser(usernameRaw) {
   const username = normalizeUsername(usernameRaw);
   const row = dbh.getUser.get(username);
   if (row) return row;
-  const init = { username, xp: 0, level: 1, last_attack_ms: 0 };
+  const init = { username, xp: 0, level: 1, last_attack_ms: 0, last_heal_ms: 0 };
   dbh.upsertUser.run(init);
   return init;
 }
 
-function updateUser(username, xpAdd, maybeLastAttackMs = null) {
+function updateUser(username, xpAdd, maybeLastAttackMs = null, maybeLastHealMs = null) {
   const user = ensureUser(username);
   const next = awardXp(user.xp, xpAdd);
 
   const last_attack_ms = maybeLastAttackMs !== null ? maybeLastAttackMs : user.last_attack_ms;
+  const last_heal_ms = maybeLastHealMs !== null ? maybeLastHealMs : user.last_heal_ms;
 
   dbh.upsertUser.run({
     username: user.username,
     xp: next.xp,
     level: next.level,
-    last_attack_ms
+    last_attack_ms,
+    last_heal_ms
   });
 
-  return { username: user.username, xp: next.xp, level: next.level, last_attack_ms };
+  return { username: user.username, xp: next.xp, level: next.level, last_attack_ms, last_heal_ms };
 }
 
 function recordEvent(username, kind, amount = 0, meta = "") {
@@ -132,8 +135,8 @@ function getLeaderboards() {
   dayStart.setHours(0, 0, 0, 0);
   const dayStartMs = dayStart.getTime();
 
-  const topXp = dbh.topUsersByXp.all(10);
-  const topDmg = dbh.topHittersToday.all(dayStartMs, 10);
+  const topXp = dbh.topUsersByXp.all(5);
+  const topDmg = dbh.topHittersToday.all(dayStartMs, 5);
 
   return { topXp, topDmg };
 }
@@ -263,9 +266,14 @@ function handleKickMessage({ user, text }) {
   if (t === "!heal") {
     // Heal to boss (hardcore chaos): chat can troll - heals boss a bit, but gives XP.
     const u = ensureUser(user);
+    const now = nowMs();
+    if (now - u.last_heal_ms < CHAT_HEAL_COOLDOWN_MS) {
+      // silent cooldown (żeby nie spamować)
+      return;
+    }
     const heal = 15;
     state.bossHp = Math.min(state.bossMaxHp, state.bossHp + heal);
-    updateUser(u.username, 5);
+    updateUser(u.username, 5, null, now);
     recordEvent(u.username, "chat_heal", heal, "kick");
     broadcastState({ leaderboards: getLeaderboards(), toast: `${u.username} healed boss +${heal} 😈` });
     return;
@@ -312,7 +320,7 @@ function handleStreamlabsEvent(data) {
     const amount = safeInt(msg?.amount, 0);
 
     // dmg: amount * mult; also scale by phase (hardcore)
-    const phaseMult = state.phase === 4 ? 2 : state.phase === 3 ? 1.5 : state.phase === 2 ? 1.2 : 1;
+    const phaseMult = state.phase >= 4 ? 2 : state.phase === 3 ? 1.5 : state.phase === 2 ? 1.2 : 1;
     const dmg = Math.max(10, Math.floor(amount * DONATE_DMG_MULT * phaseMult));
 
     updateUser(who, 20 + Math.min(100, dmg / 10));

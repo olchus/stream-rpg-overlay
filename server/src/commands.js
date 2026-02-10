@@ -1,5 +1,5 @@
 import { normalizeUsername, safeInt, clamp, nowMs } from "./util.js";
-import { applyDamage, maybeChaos } from "./game.js";
+import { applyDamage, maybeChaos, setBossPhase } from "./game.js";
 import { canRun } from "./auth.js";
 
 function parseArgs(text) {
@@ -65,10 +65,18 @@ export function handleCommand(ctx) {
   }
 
   if (cmd === "heal") {
+    const cooldownMs = safeInt(ctx.env.CHAT_HEAL_COOLDOWN_MS, 120000);
+    const now = nowMs();
+    const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
+    const lastHealMs = row?.last_heal_ms ?? 0;
+    if (now - lastHealMs < cooldownMs) {
+      return { ok: false, silent: true };
+    }
+
     const heal = 15;
     ctx.state.bossHp = Math.min(ctx.state.bossMaxHp, ctx.state.bossHp + heal);
 
-    ctx.updateUser(user, 5);
+    ctx.updateUser(user, 5, null, now);
     ctx.recordEvent(user, "chat_heal", heal, "cloudbot");
 
     ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `${user} !heal → +${heal} 😈` });
@@ -100,8 +108,7 @@ export function handleCommand(ctx) {
     }
 
     if (authKey === "reset") {
-      ctx.state.bossHp = ctx.state.bossMaxHp;
-      ctx.state.phase = 1;
+      setBossPhase(ctx.state, 1);
       ctx.state.lastHits.unshift({ by: "SYSTEM", amount: 0, source: `RESET by ${user}`, ts: Date.now() });
       ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `BOSS RESET by ${user}` });
       return { ok: true };
@@ -115,8 +122,8 @@ export function handleCommand(ctx) {
     }
 
     if (authKey === "phase") {
-      const p = clamp(safeInt(adminArgs[0], ctx.state.phase), 1, 4);
-      ctx.state.phase = p;
+      const p = clamp(safeInt(adminArgs[0], ctx.state.phase), 1, 9999);
+      setBossPhase(ctx.state, p);
       ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `PHASE ${p} forced by ${user}` });
       return { ok: true };
     }
@@ -161,7 +168,7 @@ export function handleCommand(ctx) {
     if (authKey === "resetxp") {
       if (!ctx.db?.db) return { ok: false, message: "db missing" };
       try {
-        ctx.db.db.exec("UPDATE users SET xp=0, level=1, last_attack_ms=0;");
+        ctx.db.db.exec("UPDATE users SET xp=0, level=1, last_attack_ms=0, last_heal_ms=0;");
         ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `XP reset by ${user}` });
         return { ok: true };
       } catch (e) {
@@ -172,10 +179,9 @@ export function handleCommand(ctx) {
     if (authKey === "resetall") {
       if (!ctx.db?.db) return { ok: false, message: "db missing" };
       try {
-        ctx.state.bossHp = ctx.state.bossMaxHp;
-        ctx.state.phase = 1;
+        setBossPhase(ctx.state, 1);
         ctx.state.lastHits = [];
-        ctx.db.db.exec("DELETE FROM events; UPDATE users SET xp=0, level=1, last_attack_ms=0;");
+        ctx.db.db.exec("DELETE FROM events; UPDATE users SET xp=0, level=1, last_attack_ms=0, last_heal_ms=0;");
         ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `RESET ALL by ${user}` });
         return { ok: true };
       } catch (e) {
