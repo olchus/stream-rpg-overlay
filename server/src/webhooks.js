@@ -38,11 +38,36 @@ export function registerWebhooks(app, deps) {
     const text = String(req.body?.text || req.query?.text || "");
     const level = String(req.body?.level || req.query?.level || "viewer");
     const role = roleFromCloudbotLevel(level);
+    const eventId = crypto.randomUUID();
+    const envName = env.NODE_ENV || process.env.NODE_ENV || "unknown";
+    const source = "cloudbot";
+    const ts = new Date().toISOString();
+    const contentType = req.header("content-type") || "";
+
+    console.log(
+      "[chat][recv]",
+      JSON.stringify({
+        ts,
+        env: envName,
+        source,
+        eventId,
+        contentType,
+        userRaw: user,
+        cmdRaw: text,
+        roleRaw: level,
+        role
+      })
+    );
 
     const result = handleCommand({
       user,
       role,
       rawText: text,
+      userRaw: user,
+      roleRaw: level,
+      cmdRaw: text,
+      eventId,
+      source,
       state,
       env,
       auth,
@@ -51,6 +76,19 @@ export function registerWebhooks(app, deps) {
       getLeaderboards,
       broadcastState
     });
+
+    console.log(
+      "[chat][result]",
+      JSON.stringify({
+        ts: new Date().toISOString(),
+        env: envName,
+        source,
+        eventId,
+        ok: result?.ok,
+        message: result?.message,
+        silent: result?.silent
+      })
+    );
 
     return res.json({ ok: true, result });
   });

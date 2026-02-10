@@ -12,8 +12,30 @@ export function handleCommand(ctx) {
   // ctx:
   // { user, role, rawText, state, env, dbFns, broadcastState, recordEvent, updateUser, getLeaderboards, auth }
 //console.log("[cmd]", { user: ctx.user, role: ctx.role, rawText: ctx.rawText });
+  const userRaw = ctx?.userRaw ?? ctx?.user ?? "";
+  const cmdRaw = ctx?.cmdRaw ?? ctx?.rawText ?? "";
+  const roleRaw = ctx?.roleRaw ?? ctx?.role ?? "";
+  const envName = ctx?.env?.NODE_ENV || process.env.NODE_ENV || "unknown";
+  const source = ctx?.source || "unknown";
+  const eventId = ctx?.eventId || "na";
+
   const user = normalizeUsername(ctx.user);
   const { cmd, args } = parseArgs(ctx.rawText);
+
+  console.log(
+    "[chat][parse]",
+    JSON.stringify({
+      ts: new Date().toISOString(),
+      env: envName,
+      source,
+      eventId,
+      userRaw,
+      cmdRaw,
+      roleRaw,
+      cmd,
+      args
+    })
+  );
 
   if (ctx.state.paused && (ctx.role === "viewer")) {
     return { ok: false, message: "paused" };
