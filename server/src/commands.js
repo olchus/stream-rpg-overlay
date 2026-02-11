@@ -1,6 +1,24 @@
-import { normalizeUsername, safeInt, clamp, nowMs } from "./util.js";
+import { normalizeUsername, safeInt, clamp, nowMs, pickRandom } from "./util.js";
 import { applyDamage, maybeChaos, setBossPhase } from "./game.js";
 import { canRun } from "./auth.js";
+
+const CHAOS_TASKS = [
+  "Expisz bez kola przez 30 min.",
+  "Boss run -> rolada i profit dla widza.",
+  "Zdejmujesz 1 losowy item i expisz bez niego przez 10 min.",
+  "Zmieniasz spawn na 30 minut.",
+  "Hunt bez uzywania jednego spella.",
+  "Grasz bez SSA / bez might ringa przez 10 minut.",
+  "Uzywasz tylko 1 rodzaju potow przez 15 minut.",
+  "Czat wybiera kolejny spawn z 3 opcji.",
+  "Idziesz solo na spawn, ktory zwykle robisz w teamie.",
+  "Otwierasz stash i losujesz jeden item do uzycia na hunt.",
+  "Grasz na full waste przez 30 minut (liczymy straty).",
+  "Jesli padniesz -> robisz giveaway 1kk.",
+  "Musisz utrzymac min. X exp/h – jesli spadnie -> zmiana spawna.",
+  "20 minut bez healowania exura (med) ico (tylko poty).",
+  "MSem solo na miejscu \"nie dla MS\"."
+];
 
 function parseArgs(text) {
   const parts = String(text || "").trim().split(/\s+/g);
@@ -27,6 +45,9 @@ export function handleCommand(ctx) {
   if (bosshitMatch) {
     cmdNorm = "bosshit";
     bosshitInline = bosshitMatch[1];
+  }
+  if (cmdNorm === "makechaos") {
+    cmdNorm = "maybechaos";
   }
 
   console.log(
@@ -109,6 +130,7 @@ export function handleCommand(ctx) {
     adminCmd === "resume" ? "resume" :
     adminCmd === "setmult" ? "setmult" :
     adminCmd === "maybechaos" ? "maybechaos" :
+    adminCmd === "clearchaos" ? "clearchaos" :
     adminCmd === "clearhits" ? "clearhits" :
     adminCmd === "resetxp" ? "resetxp" :
     adminCmd === "resetall" ? "resetall" :
@@ -176,8 +198,15 @@ export function handleCommand(ctx) {
     }
 
     if (authKey === "maybechaos") {
-      const chaos = maybeChaos(ctx.state, true, 0, 1);
-      ctx.broadcastState({ chaos, toast: `CHAOS by ${user}` });
+      const task = pickRandom(CHAOS_TASKS);
+      ctx.state.chaosLast = { kind: "TASK", text: task, ts: Date.now() };
+      ctx.broadcastState({ chaos: ctx.state.chaosLast, toast: `CHAOS TASK by ${user}` });
+      return { ok: true };
+    }
+
+    if (authKey === "clearchaos") {
+      ctx.state.chaosLast = null;
+      ctx.broadcastState({ chaos: null, toast: `CHAOS cleared by ${user}` });
       return { ok: true };
     }
 

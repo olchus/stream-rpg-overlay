@@ -33,6 +33,7 @@ export function canRun(command, user, role, auth) {
     "resume",
     "setmult",
     "clearhits",
+    "clearchaos",
     "resetxp",
     "resetall",
     "shutdown"
