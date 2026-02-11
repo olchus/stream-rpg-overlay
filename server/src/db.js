@@ -65,7 +65,7 @@ export function initDb() {
   const topHittersToday = db.prepare(`
     SELECT username, SUM(amount) AS dmg
     FROM events
-    WHERE kind IN ('chat_attack','sub_hit','donation_hit','follow_hit')
+    WHERE kind IN ('chat_attack','sub_hit','donation_hit','follow_hit','kick_gift')
       AND ts_ms >= ?
     GROUP BY username
     ORDER BY dmg DESC

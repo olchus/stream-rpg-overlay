@@ -99,6 +99,41 @@ function roleFromKickUser(userRaw) {
   return "viewer";
 }
 
+function parseKickGiftMessage(text, raw) {
+  if (!text) return null;
+  const amountMatch = String(text).match(/(\d+)\s*kicks?\b/i);
+  if (!amountMatch) return null;
+  const kicks = safeInt(amountMatch[1], 0);
+  if (kicks <= 0) return null;
+
+  const senderRaw =
+    raw?.sender?.username ||
+    raw?.sender?.slug ||
+    raw?.sender?.name ||
+    raw?.username ||
+    raw?.user?.username ||
+    raw?.user?.name ||
+    "";
+
+  let giver = normalizeUsername(String(senderRaw).replace(/^@/, ""));
+  const senderHint = String(senderRaw || "").toLowerCase();
+  if (!giver || giver === "unknown" || senderHint === "kick" || senderHint === "system") {
+    const nameMatch = String(text).match(/^@?([A-Za-z0-9_-]{2,})\b/);
+    if (nameMatch) giver = normalizeUsername(nameMatch[1]);
+  }
+  if (!giver || giver === "unknown") return null;
+
+  const typeHint = String(raw?.type || raw?.message_type || raw?.event || raw?.kind || "").toLowerCase();
+  const looksLikeSystem =
+    raw?.system === true ||
+    raw?.is_system === true ||
+    ["system", "event", "gift", "kicks"].some((k) => typeHint.includes(k));
+  const looksLikeGift = /gift|podarow|sent/i.test(String(text));
+  if (!looksLikeSystem && !looksLikeGift) return null;
+
+  return { giver, kicks };
+}
+
 function ensureUser(usernameRaw) {
   const username = normalizeUsername(usernameRaw);
   const row = dbh.getUser.get(username);
@@ -237,8 +272,20 @@ io.on("connection", (socket) => {
 });
 
 // ----- Kick commands -----
-function handleKickMessage({ user, text }) {
+function handleKickMessage({ user, text, raw }) {
   const t = String(text || "").trim();
+
+  const gift = parseKickGiftMessage(t, raw);
+  if (gift) {
+    if (state.paused) return;
+    const u = ensureUser(gift.giver);
+    const dmg = gift.kicks;
+    updateUser(u.username, 2);
+    recordEvent(u.username, "kick_gift", dmg, JSON.stringify({ kicks: gift.kicks, source: "kick" }));
+    applyDamage(state, u.username, dmg, "kick_gift");
+    broadcastState({ leaderboards: getLeaderboards(), toast: `${u.username} gifted ${gift.kicks} KICKS -> HIT -${dmg}` });
+    return;
+  }
 
   if (!t.startsWith("!")) return;
   const role = roleFromKickUser(user);

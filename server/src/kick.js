@@ -91,7 +91,7 @@ export async function connectKick(channel, onMessage) {
       if (!payload) return;
       const user = normalizeUsername(payload?.sender?.username || payload?.sender?.slug || payload?.username);
       const text = String(payload?.content ?? "");
-      onMessage({ user, text });
+      onMessage({ user, text, raw: payload, type: "chat" });
     }
   });
 
