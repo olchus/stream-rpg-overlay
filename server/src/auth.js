@@ -27,6 +27,7 @@ export function canRun(command, user, role, auth) {
   const adminOnly = new Set([
     "reset",
     "sethp",
+    "bosshit",
     "phase",
     "pause",
     "resume",

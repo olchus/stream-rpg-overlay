@@ -21,6 +21,13 @@ export function handleCommand(ctx) {
 
   const user = normalizeUsername(ctx.user);
   const { cmd, args } = parseArgs(ctx.rawText);
+  let cmdNorm = cmd;
+  let bosshitInline = null;
+  const bosshitMatch = cmd.match(/^bosshit\+?(-?\d+)$/);
+  if (bosshitMatch) {
+    cmdNorm = "bosshit";
+    bosshitInline = bosshitMatch[1];
+  }
 
   console.log(
     "[chat][parse]",
@@ -89,13 +96,14 @@ export function handleCommand(ctx) {
 
   // ---- ADMIN / MOD ----
   // mapujemy aliasy admin komend
-  const adminCmd = cmd === "boss" ? (args[0] || "").toLowerCase() : cmd; // np. !boss reset
-  const adminArgs = cmd === "boss" ? args.slice(1) : args;
+  const adminCmd = cmdNorm === "boss" ? (args[0] || "").toLowerCase() : cmdNorm; // np. !boss reset
+  const adminArgs = cmdNorm === "boss" ? args.slice(1) : args;
 
   // Ustal “nazwa komendy do autoryzacji”
   const authKey =
     adminCmd === "reset" ? "reset" :
     adminCmd === "sethp" ? "sethp" :
+    adminCmd === "bosshit" ? "bosshit" :
     adminCmd === "phase" ? "phase" :
     adminCmd === "pause" ? "pause" :
     adminCmd === "resume" ? "resume" :
@@ -122,6 +130,16 @@ export function handleCommand(ctx) {
       const hp = safeInt(adminArgs[0], ctx.state.bossHp);
       ctx.state.bossHp = clamp(hp, 0, ctx.state.bossMaxHp);
       ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `HP set to ${ctx.state.bossHp} by ${user}` });
+      return { ok: true };
+    }
+
+    if (authKey === "bosshit") {
+      const raw = bosshitInline ?? adminArgs[0];
+      const dmg = clamp(safeInt(raw, 0), 0, 999999);
+      if (dmg <= 0) return { ok: false, message: "usage: !bosshit 500" };
+      ctx.recordEvent(user, "admin_bosshit", dmg, "admin");
+      applyDamage(ctx.state, user, dmg, "admin_bosshit");
+      ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `BOSS HIT -${dmg} by ${user}` });
       return { ok: true };
     }
 
