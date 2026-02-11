@@ -20,7 +20,7 @@ import {
   saveStreamlabsToken
 } from "./streamlabsAuth.js";
 import { connectKick } from "./kick.js";
-import { nowMs, safeInt, normalizeUsername } from "./util.js";
+import { nowMs, safeInt, safeNumber, normalizeUsername } from "./util.js";
 import { registerWebhooks } from "./webhooks.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -53,7 +53,7 @@ const BOSS_MAX_HP = safeInt(env.BOSS_MAX_HP, 5000);
 const CHAT_ATTACK_DAMAGE = safeInt(env.CHAT_ATTACK_DAMAGE, 5);
 const FOLLOW_DAMAGE = safeInt(env.FOLLOW_DAMAGE, 20);
 const SUB_DAMAGE = safeInt(env.SUB_DAMAGE, 150);
-const DONATE_DMG_MULT = safeInt(env.DONATE_DMG_MULT, 10);
+const DONATE_DMG_MULT = safeNumber(env.DONATE_DMG_MULT, 2.5);
 
 const CHAT_ATTACK_COOLDOWN_MS = safeInt(env.CHAT_ATTACK_COOLDOWN_MS, 60000);
 const CHAT_HEAL_COOLDOWN_MS = safeInt(env.CHAT_HEAL_COOLDOWN_MS, 120000);
@@ -321,7 +321,8 @@ function handleStreamlabsEvent(data) {
 
     // dmg: amount * mult; also scale by phase (hardcore)
     const phaseMult = state.phase >= 4 ? 2 : state.phase === 3 ? 1.5 : state.phase === 2 ? 1.2 : 1;
-    const dmg = Math.max(10, Math.floor(amount * DONATE_DMG_MULT * phaseMult));
+    const dmg = amount * DONATE_DMG_MULT * phaseMult;
+    if (dmg <= 0) return;
 
     updateUser(who, 20 + Math.min(100, dmg / 10));
     recordEvent(who, "donation_hit", dmg, JSON.stringify({ amount }));

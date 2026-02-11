@@ -11,6 +11,11 @@ export function safeInt(v, fallback = 0) {
   return Number.isFinite(n) ? Math.floor(n) : fallback;
 }
 
+export function safeNumber(v, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }

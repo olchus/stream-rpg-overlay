@@ -1,4 +1,4 @@
-import { clamp, nowMs, pickRandom, safeInt, normalizeUsername } from "./util.js";
+import { clamp, nowMs, pickRandom, safeInt, safeNumber, normalizeUsername } from "./util.js";
 
 const PHASE_HP_STEP = 2000;
 
@@ -46,7 +46,7 @@ export function setBossPhase(state, phase) {
 
 export function applyDamage(state, byRaw, amountRaw, source) {
   const by = normalizeUsername(byRaw);
-  const amount = clamp(safeInt(amountRaw, 0), 0, 999999);
+  const amount = clamp(safeNumber(amountRaw, 0), 0, 999999);
 
   state.bossHp = clamp(state.bossHp - amount, 0, state.bossMaxHp);
 

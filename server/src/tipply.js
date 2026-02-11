@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { applyDamage } from "./game.js";
-import { normalizeUsername, safeInt } from "./util.js";
+import { normalizeUsername, safeInt, safeNumber } from "./util.js";
 
 function getPath(obj, path) {
   if (!obj || !path) return undefined;
@@ -90,6 +90,8 @@ export function registerTipplyWebhook(app, deps) {
   const enabled = String(env.TIPPLY_WEBHOOK_ENABLED || "true").toLowerCase() === "true";
   if (!enabled) return;
 
+  const donateMult = safeNumber(env.DONATE_DMG_MULT, 2.5);
+
   const path = env.TIPPLY_WEBHOOK_PATH || "/api/tipply";
   const secret = env.TIPPLY_WEBHOOK_SECRET || "";
   const headerName = String(env.TIPPLY_WEBHOOK_HEADER || "x-tipply-secret").toLowerCase();
@@ -125,7 +127,7 @@ export function registerTipplyWebhook(app, deps) {
     }
 
     const pln = amount.amountPln;
-    const dmg = Math.floor(pln);
+    const dmg = Math.floor(pln) * donateMult;
     if (dmg <= 0) {
       return res.json({ ok: true, ignored: true, reason: "amount_lt_1" });
     }
@@ -152,6 +154,7 @@ export function startTipplyGoalPoller(deps) {
   const url = env.TIPPLY_GOAL_API_URL || "";
   if (!enabled || !url) return;
 
+  const donateMult = safeNumber(env.DONATE_DMG_MULT, 2.5);
   const pollMs = Math.max(2000, safeInt(env.TIPPLY_GOAL_POLL_MS, 15000));
   const actor = normalizeUsername(env.TIPPLY_GOAL_USER || "donator");
   const envName = env.NODE_ENV || process.env.NODE_ENV || "unknown";
@@ -201,7 +204,7 @@ export function startTipplyGoalPoller(deps) {
         return;
       }
 
-      const dmg = Math.floor(delta);
+      const dmg = Math.floor(delta) * donateMult;
       if (dmg <= 0) {
         lastTotalPln = total.totalPln;
         return;
