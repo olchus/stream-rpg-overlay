@@ -45,6 +45,8 @@ export function handleCommand(ctx) {
 
   // routing komend: viewer
   if (cmd === "attack") {
+    if (ctx.state.paused) return { ok: false, message: "paused" };
+
     const dmgBase = safeInt(ctx.env.CHAT_ATTACK_DAMAGE, 5);
     const dmg = clamp(dmgBase, 1, 9999);
     const cooldownMs = safeInt(ctx.env.CHAT_ATTACK_COOLDOWN_MS, 60000);
@@ -65,6 +67,8 @@ export function handleCommand(ctx) {
   }
 
   if (cmd === "heal") {
+    if (ctx.state.paused) return { ok: false, message: "paused" };
+
     const cooldownMs = safeInt(ctx.env.CHAT_HEAL_COOLDOWN_MS, 120000);
     const now = nowMs();
     const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;

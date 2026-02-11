@@ -244,6 +244,7 @@ function handleKickMessage({ user, text }) {
   const role = roleFromKickUser(user);
 
   if (t === "!attack") {
+    if (state.paused) return;
     const u = ensureUser(user);
     const now = nowMs();
 
@@ -265,6 +266,7 @@ function handleKickMessage({ user, text }) {
 
   if (t === "!heal") {
     // Heal to boss (hardcore chaos): chat can troll - heals boss a bit, but gives XP.
+    if (state.paused) return;
     const u = ensureUser(user);
     const now = nowMs();
     if (now - u.last_heal_ms < CHAT_HEAL_COOLDOWN_MS) {
