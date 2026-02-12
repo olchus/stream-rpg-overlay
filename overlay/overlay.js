@@ -8,6 +8,9 @@ const toast = document.getElementById("toast");
 const chaos = document.getElementById("chaos");
 const topDmg = document.getElementById("topDmg");
 const topXp = document.getElementById("topXp");
+const reward1 = document.getElementById("reward1");
+const reward2 = document.getElementById("reward2");
+const reward3 = document.getElementById("reward3");
 const phaseWinnersTitle = document.getElementById("phaseWinnersTitle");
 const phaseWinners = document.getElementById("phaseWinners");
 
@@ -21,8 +24,18 @@ socket.on("state", (s) => {
   hpText.textContent = `HP: ${hp} / ${max}`;
   barFill.style.width = `${pct * 100}%`;
 
-  phase.textContent = `PHASE ${s.phase ?? 1}`;
-  document.body.dataset.phase = String(s.phase ?? 1);
+  const phaseRaw = Number(s.phase);
+  const phaseNum = Number.isFinite(phaseRaw) && phaseRaw > 0
+    ? Math.trunc(phaseRaw)
+    : 1;
+  phase.textContent = `PHASE ${phaseNum}`;
+  document.body.dataset.phase = String(phaseNum);
+
+  // reward pool grows by +25 TC for each place on every next phase
+  const phaseBonus = Math.max(0, phaseNum - 1) * 25;
+  if (reward1) reward1.textContent = `${100 + phaseBonus}TC`;
+  if (reward2) reward2.textContent = `${50 + phaseBonus}TC`;
+  if (reward3) reward3.textContent = `${25 + phaseBonus}TC`;
 
   // last hits
   hits.innerHTML = (s.lastHits || [])
