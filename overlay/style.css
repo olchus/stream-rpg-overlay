@@ -106,6 +106,7 @@ body {
 .muted { opacity: .65; font-size: 14px; }
 
 .hint { margin-top: 10px; font-size: 13px; opacity: .95; }
+.hint ul { margin: 0px; padding: 0px;}
 .hint li {list-style: none; text-align: center;}
 
 body[data-phase="2"] .barFill { filter: brightness(1.05); }
