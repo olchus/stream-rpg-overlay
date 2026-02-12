@@ -59,7 +59,7 @@ socket.on("state", (s) => {
     ? winners.map((w, i) => {
         const medals = ['🥇', '🥈', '🥉'];
         const medal = medals[i] || '•';
-        return `<div class="winner"><span class="medal">${medal}</span><span class="name">${esc(w.username)}</span><span class="level">lvl ${w.level} / ${w.xp ?? 0}xp</span></div>`;
+        return `<div class="winner"><span class="medal">${medal}</span><span class="name">${esc(w.username)} </span><span class="level">lvl ${w.level} / ${w.xp ?? 0}xp</span></div>`;
       }).join("")
     : `<div class="muted">no winners yet</div>`;
 });
