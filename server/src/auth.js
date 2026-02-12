@@ -1,7 +1,11 @@
 import { normalizeUsername } from "./util.js";
 
+function authUserKey(user) {
+  return normalizeUsername(user).toLowerCase();
+}
+
 export function buildAuth(env) {
-  const admin = normalizeUsername(env.ADMIN_USERNAME || "olcha_str");
+  const admin = authUserKey(env.ADMIN_USERNAME || "olcha_str");
   return { admin };
 }
 
@@ -16,7 +20,7 @@ export function roleFromCloudbotLevel(levelRaw) {
 }
 
 export function isAdmin(user, auth) {
-  return normalizeUsername(user) === auth.admin;
+  return authUserKey(user) === auth.admin;
 }
 
 export function canRun(command, user, role, auth) {

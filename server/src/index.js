@@ -39,13 +39,13 @@ const KICK_ENABLED = (env.KICK_ENABLED || "true").toLowerCase() === "true";
 const KICK_ADMIN_USERS = new Set(
   String(env.KICK_ADMIN_USERS || "")
     .split(",")
-    .map((s) => normalizeUsername(s))
+    .map((s) => normalizeUsername(s).toLowerCase())
     .filter(Boolean)
 );
 const KICK_MOD_USERS = new Set(
   String(env.KICK_MOD_USERS || "")
     .split(",")
-    .map((s) => normalizeUsername(s))
+    .map((s) => normalizeUsername(s).toLowerCase())
     .filter(Boolean)
 );
 
@@ -92,7 +92,7 @@ function broadcastState(extra = {}) {
 }
 
 function roleFromKickUser(userRaw) {
-  const u = normalizeUsername(userRaw);
+  const u = normalizeUsername(userRaw).toLowerCase();
   if (!u) return "viewer";
   if (u === auth.admin || KICK_ADMIN_USERS.has(u)) return "admin";
   if (KICK_MOD_USERS.has(u)) return "mod";
@@ -356,6 +356,9 @@ function handleKickMessage({ user, text, raw }) {
   });
 
   if (result?.ok) return;
+  if (result?.message && !result?.silent) {
+    console.log("[kick][cmd]", JSON.stringify({ user, role, cmd: t, ok: result.ok, message: result.message }));
+  }
 }
 
 // ----- Streamlabs events -----
