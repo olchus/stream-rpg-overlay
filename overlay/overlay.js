@@ -8,6 +8,7 @@ const toast = document.getElementById("toast");
 const chaos = document.getElementById("chaos");
 const topDmg = document.getElementById("topDmg");
 const topXp = document.getElementById("topXp");
+const phaseWinnersTitle = document.getElementById("phaseWinnersTitle");
 const phaseWinners = document.getElementById("phaseWinners");
 
 let toastTimer = null;
@@ -55,6 +56,15 @@ socket.on("state", (s) => {
 
   // phase winners
   const winners = s.phaseWinners || [];
+  const winnersPhaseRaw = Number(s.phaseWinnersPhase);
+  const winnersPhase = Number.isFinite(winnersPhaseRaw) && winnersPhaseRaw > 0
+    ? Math.trunc(winnersPhaseRaw)
+    : null;
+  if (phaseWinnersTitle) {
+    phaseWinnersTitle.textContent = winnersPhase
+      ? `PHASE ${winnersPhase} WINNERS`
+      : "PHASE WINNERS";
+  }
   phaseWinners.innerHTML = winners.length
     ? winners.map((w, i) => {
         const medals = ['🥇', '🥈', '🥉'];

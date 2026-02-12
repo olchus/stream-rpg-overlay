@@ -31,7 +31,8 @@ export function createGameState(env) {
     phaseStartMs: nowMs(),
     lastHits: [], // {by, amount, source, ts}
     chaosLast: null, // {kind, ts, text}
-    phaseWinners: [], // {username, dmg} top 3 from last phase
+    phaseWinners: [], // top 3 by XP
+    phaseWinnersPhase: null, // phase number that was just defeated
     startedAtMs: nowMs()
   };
 }
@@ -59,9 +60,10 @@ export function applyDamage(state, byRaw, amountRaw, source) {
   if (state.bossHp === 0) {
     const nextPhase = Math.max(1, safeInt(state.phase, 1)) + 1;
     setBossPhase(state, nextPhase);
+    state.phaseWinnersPhase = nextPhase - 1;
     state.lastHits.unshift({ by: "SYSTEM", amount: 0, source: `BOSS DEFEATED -> PHASE ${nextPhase}`, ts: nowMs() });
     state.lastHits = state.lastHits.slice(0, 10);
-    return { defeated: true };
+    return { defeated: true, defeatedPhase: nextPhase - 1 };
   }
   return { defeated: false };
 }
