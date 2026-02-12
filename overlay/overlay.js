@@ -60,12 +60,13 @@ socket.on("state", (s) => {
   const winnersPhase = Number.isFinite(winnersPhaseRaw) && winnersPhaseRaw > 0
     ? Math.trunc(winnersPhaseRaw)
     : null;
+  const showWinners = Boolean(winnersPhase) && winners.length > 0;
   if (phaseWinnersTitle) {
     phaseWinnersTitle.textContent = winnersPhase
       ? `PHASE ${winnersPhase} WINNERS`
       : "PHASE WINNERS";
   }
-  phaseWinners.innerHTML = winners.length
+  phaseWinners.innerHTML = showWinners
     ? winners.map((w, i) => {
         const medals = ['🥇', '🥈', '🥉'];
         const medal = medals[i] || '•';

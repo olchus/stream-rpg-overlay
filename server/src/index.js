@@ -181,8 +181,6 @@ function getPhaseWinners(phaseStartMs) {
   return winners || [];
 }
 
-state.phaseWinners = getPhaseWinners(state.phaseStartMs);
-
 // Serve overlay as static
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
