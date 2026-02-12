@@ -20,6 +20,19 @@ const CHAOS_TASKS = [
   "MSem solo na miejscu \"nie dla MS\"."
 ];
 
+function sendChaosTaskWebhook(env, task, user) {
+  const url = String(env?.CHAOS_TASK_WEBHOOK_URL || "").trim();
+  if (!url) return;
+  const message = `😵‍💫💥CHAOS TASK: ${task} 😵‍💫💥`;
+  fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ message, task, by: user })
+  }).catch((e) => {
+    console.log("[chaos][webhook] error:", e?.message || e);
+  });
+}
+
 function parseArgs(text) {
   const parts = String(text || "").trim().split(/\s+/g);
   const cmd = (parts.shift() || "").replace(/^!/, "").toLowerCase();
@@ -200,6 +213,7 @@ export function handleCommand(ctx) {
     if (authKey === "maybechaos") {
       const task = pickRandom(CHAOS_TASKS);
       ctx.state.chaosLast = { kind: "TASK", text: task, ts: Date.now() };
+      sendChaosTaskWebhook(ctx.env, task, user);
       ctx.broadcastState({ chaos: ctx.state.chaosLast, toast: `CHAOS TASK by ${user}` });
       return { ok: true };
     }
