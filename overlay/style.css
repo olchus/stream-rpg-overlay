@@ -109,6 +109,18 @@ body {
 .hint ul { margin: 0px; padding: 0px;}
 .hint li {list-style: none; text-align: center;}
 
+.winner {
+  display:flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 14px;
+  margin: 6px 0;
+}
+
+.medal { min-width: 24px; text-align: center; font-size: 16px; }
+.winner .name { font-weight: 800; flex: 1; }
+.winner .level { opacity: .9; }
+
 body[data-phase="2"] .barFill { filter: brightness(1.05); }
 body[data-phase="3"] .barFill { filter: brightness(1.12); }
 body[data-phase="4"] .barFill { filter: brightness(1.2); }

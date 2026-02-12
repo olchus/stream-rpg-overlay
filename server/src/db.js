@@ -72,6 +72,16 @@ export function initDb() {
     LIMIT ?
   `);
 
+  const topHittersInRange = db.prepare(`
+    SELECT username, SUM(amount) AS dmg
+    FROM events
+    WHERE kind IN ('chat_attack','sub_hit','donation_hit','follow_hit','kick_gift')
+      AND ts_ms >= ? AND ts_ms <= ?
+    GROUP BY username
+    ORDER BY dmg DESC
+    LIMIT ?
+  `);
+
   const resetDaily = db.prepare(`
     DELETE FROM events WHERE ts_ms < ?
   `);
@@ -84,6 +94,7 @@ export function initDb() {
     addEvent,
     topUsersByXp,
     topHittersToday,
+    topHittersInRange,
     resetDaily
   };
 }

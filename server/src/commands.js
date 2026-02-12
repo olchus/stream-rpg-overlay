@@ -134,7 +134,11 @@ export function handleCommand(ctx) {
 
     ctx.updateUser(user, 2, now);
     ctx.recordEvent(user, "chat_attack", dmg, "cloudbot");
-    applyDamage(ctx.state, user, dmg, "cloudbot_attack");
+    const result = applyDamage(ctx.state, user, dmg, "cloudbot_attack");
+    if (result.defeated) {
+      ctx.state.phaseWinners = ctx.getPhaseWinners?.(ctx.state.phaseStartMs) || [];
+      ctx.state.phaseStartMs = nowMs();
+    }
 
     ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `${user} !attack → -${dmg}` });
     return { ok: true };
@@ -206,7 +210,11 @@ export function handleCommand(ctx) {
       const dmg = clamp(safeInt(raw, 0), 0, 999999);
       if (dmg <= 0) return { ok: false, message: "usage: !bosshit 500" };
       ctx.recordEvent(user, "admin_bosshit", dmg, "admin");
-      applyDamage(ctx.state, user, dmg, "admin_bosshit");
+      const result = applyDamage(ctx.state, user, dmg, "admin_bosshit");
+      if (result.defeated) {
+        ctx.state.phaseWinners = ctx.getPhaseWinners?.(ctx.state.phaseStartMs) || [];
+        ctx.state.phaseStartMs = nowMs();
+      }
       ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `BOSS HIT -${dmg} by ${user}` });
       return { ok: true };
     }

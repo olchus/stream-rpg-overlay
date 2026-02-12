@@ -28,8 +28,10 @@ export function createGameState(env) {
     bossMaxHp: bossBase,
     bossHp: bossBase,
     phase: 1,
+    phaseStartMs: nowMs(),
     lastHits: [], // {by, amount, source, ts}
     chaosLast: null, // {kind, ts, text}
+    phaseWinners: [], // {username, dmg} top 3 from last phase
     startedAtMs: nowMs()
   };
 }

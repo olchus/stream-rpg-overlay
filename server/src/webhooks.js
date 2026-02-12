@@ -22,7 +22,8 @@ export function registerWebhooks(app, deps) {
     broadcastState,
     updateUser,
     recordEvent,
-    getLeaderboards
+    getLeaderboards,
+    getPhaseWinners
   } = deps;
 
   const secret = env.CLOUDBOT_WEBHOOK_SECRET || "";
@@ -76,6 +77,7 @@ export function registerWebhooks(app, deps) {
       updateUser,
       recordEvent,
       getLeaderboards,
+      getPhaseWinners,
       broadcastState
     });
 

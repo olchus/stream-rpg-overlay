@@ -176,6 +176,13 @@ function getLeaderboards() {
   return { topXp, topDmg };
 }
 
+function getPhaseWinners(phaseStartMs) {
+  const winners = dbh.topUsersByXp.all(3);
+  return winners || [];
+}
+
+state.phaseWinners = getPhaseWinners(state.phaseStartMs);
+
 // Serve overlay as static
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -245,7 +252,8 @@ registerWebhooks(app, {
   broadcastState,
   updateUser,
   recordEvent,
-  getLeaderboards
+  getLeaderboards,
+  getPhaseWinners
 });
 
 registerTipplyWebhook(app, {
@@ -254,7 +262,8 @@ registerTipplyWebhook(app, {
   broadcastState,
   updateUser,
   recordEvent,
-  getLeaderboards
+  getLeaderboards,
+  getPhaseWinners
 });
 
 startTipplyGoalPoller({
@@ -263,7 +272,8 @@ startTipplyGoalPoller({
   broadcastState,
   updateUser,
   recordEvent,
-  getLeaderboards
+  getLeaderboards,
+  getPhaseWinners
 });
 
 
@@ -282,7 +292,11 @@ function handleKickMessage({ user, text, raw }) {
     const dmg = gift.kicks;
     updateUser(u.username, 2);
     recordEvent(u.username, "kick_gift", dmg, JSON.stringify({ kicks: gift.kicks, source: "kick" }));
-    applyDamage(state, u.username, dmg, "kick_gift");
+    const result = applyDamage(state, u.username, dmg, "kick_gift");
+    if (result.defeated) {
+      state.phaseWinners = getPhaseWinners(state.phaseStartMs);
+      state.phaseStartMs = nowMs();
+    }
     broadcastState({ leaderboards: getLeaderboards(), toast: `${u.username} gifted ${gift.kicks} KICKS -> HIT -${dmg}` });
     return;
   }
@@ -306,7 +320,11 @@ function handleKickMessage({ user, text, raw }) {
     updateUser(u.username, 2, now); // xp za aktywność
     recordEvent(u.username, "chat_attack", scaled, "kick");
 
-    applyDamage(state, u.username, scaled, "kick_chat");
+    const result = applyDamage(state, u.username, scaled, "kick_chat");
+    if (result.defeated) {
+      state.phaseWinners = getPhaseWinners(state.phaseStartMs);
+      state.phaseStartMs = nowMs();
+    }
     broadcastState({ leaderboards: getLeaderboards() });
     return;
   }
@@ -352,6 +370,7 @@ function handleKickMessage({ user, text, raw }) {
     updateUser,
     recordEvent,
     getLeaderboards,
+    getPhaseWinners,
     broadcastState
   });
 
@@ -380,7 +399,11 @@ function handleStreamlabsEvent(data) {
     recordEvent(who, "donation_hit", dmg, JSON.stringify({ amount }));
 
     const chaos = maybeChaos(state, CHAOS_ENABLED, CHAOS_DONATE_THRESHOLD, amount);
-    applyDamage(state, who, dmg, "streamlabs_donation");
+    const result = applyDamage(state, who, dmg, "streamlabs_donation");
+    if (result.defeated) {
+      state.phaseWinners = getPhaseWinners(state.phaseStartMs);
+      state.phaseStartMs = nowMs();
+    }
 
     broadcastState({
       leaderboards: getLeaderboards(),
@@ -397,7 +420,11 @@ function handleStreamlabsEvent(data) {
     updateUser(who, 50);
     recordEvent(who, "sub_hit", dmg, "sub");
 
-    applyDamage(state, who, dmg, "streamlabs_sub");
+    const result = applyDamage(state, who, dmg, "streamlabs_sub");
+    if (result.defeated) {
+      state.phaseWinners = getPhaseWinners(state.phaseStartMs);
+      state.phaseStartMs = nowMs();
+    }
 
     broadcastState({
       leaderboards: getLeaderboards(),
@@ -413,7 +440,11 @@ function handleStreamlabsEvent(data) {
     updateUser(who, 10);
     recordEvent(who, "follow_hit", dmg, "follow");
 
-    applyDamage(state, who, dmg, "streamlabs_follow");
+    const result = applyDamage(state, who, dmg, "streamlabs_follow");
+    if (result.defeated) {
+      state.phaseWinners = getPhaseWinners(state.phaseStartMs);
+      state.phaseStartMs = nowMs();
+    }
 
     broadcastState({
       leaderboards: getLeaderboards(),

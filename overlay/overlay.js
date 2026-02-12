@@ -8,6 +8,7 @@ const toast = document.getElementById("toast");
 const chaos = document.getElementById("chaos");
 const topDmg = document.getElementById("topDmg");
 const topXp = document.getElementById("topXp");
+const phaseWinners = document.getElementById("phaseWinners");
 
 let toastTimer = null;
 
@@ -53,6 +54,16 @@ socket.on("state", (s) => {
   topXp.innerHTML = xp.length
     ? xp.slice(0, 5).map((r, i) => `<div class="lb"><span class="rank">#${i+1}</span><span class="name">${esc(r.username)}</span><span class="val">lvl ${r.level} / ${r.xp}xp</span></div>`).join("")
     : `<div class="muted">no data yet</div>`;
+
+  // phase winners
+  const winners = s.phaseWinners || [];
+  phaseWinners.innerHTML = winners.length
+    ? winners.map((w, i) => {
+        const medals = ['🥇', '🥈', '🥉'];
+        const medal = medals[i] || '•';
+        return `<div class="winner"><span class="medal">${medal}</span><span class="name">${esc(w.username)}</span><span class="level">lvl ${w.level} / ${w.xp ?? 0}xp</span></div>`;
+      }).join("")
+    : `<div class="muted">no winners yet</div>`;
 });
 
 function showToast(text) {

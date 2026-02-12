@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { applyDamage } from "./game.js";
-import { normalizeUsername, safeInt, safeNumber } from "./util.js";
+import { normalizeUsername, safeInt, safeNumber, nowMs } from "./util.js";
 
 function getPath(obj, path) {
   if (!obj || !path) return undefined;
@@ -85,7 +85,7 @@ function extractGoalTotalPln(body, env) {
 }
 
 export function registerTipplyWebhook(app, deps) {
-  const { env, state, broadcastState, updateUser, recordEvent, getLeaderboards } = deps;
+  const { env, state, broadcastState, updateUser, recordEvent, getLeaderboards, getPhaseWinners } = deps;
 
   const enabled = String(env.TIPPLY_WEBHOOK_ENABLED || "true").toLowerCase() === "true";
   if (!enabled) return;
@@ -136,7 +136,11 @@ export function registerTipplyWebhook(app, deps) {
 
     updateUser(who, 20 + Math.min(100, dmg / 10));
     recordEvent(who, "donation_hit", dmg, JSON.stringify({ amountPln: pln, source }));
-    applyDamage(state, who, dmg, "tipply_donation");
+    const result = applyDamage(state, who, dmg, "tipply_donation");
+    if (result.defeated) {
+      state.phaseWinners = getPhaseWinners(state.phaseStartMs);
+      state.phaseStartMs = nowMs();
+    }
 
     broadcastState({
       leaderboards: getLeaderboards(),
@@ -148,7 +152,7 @@ export function registerTipplyWebhook(app, deps) {
 }
 
 export function startTipplyGoalPoller(deps) {
-  const { env, state, broadcastState, updateUser, recordEvent, getLeaderboards } = deps;
+  const { env, state, broadcastState, updateUser, recordEvent, getLeaderboards, getPhaseWinners } = deps;
 
   const enabled = String(env.TIPPLY_GOAL_ENABLED || "false").toLowerCase() === "true";
   const url = env.TIPPLY_GOAL_API_URL || "";
@@ -214,7 +218,11 @@ export function startTipplyGoalPoller(deps) {
 
       updateUser(actor, 20 + Math.min(100, dmg / 10));
       recordEvent(actor, "donation_hit", dmg, JSON.stringify({ amountPln: delta, source: "tipply_goal" }));
-      applyDamage(state, actor, dmg, "tipply_goal");
+      const result = applyDamage(state, actor, dmg, "tipply_goal");
+      if (result.defeated) {
+        state.phaseWinners = getPhaseWinners(state.phaseStartMs);
+        state.phaseStartMs = nowMs();
+      }
 
       broadcastState({
         leaderboards: getLeaderboards(),
