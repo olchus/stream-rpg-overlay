@@ -24,10 +24,23 @@ function sendChaosTaskWebhook(env, task, user) {
   const url = String(env?.CHAOS_TASK_WEBHOOK_URL || "").trim();
   if (!url) return;
   const message = `😵‍💫💥CHAOS TASK: ${task} 😵‍💫💥`;
-  fetch(url, {
+  const target = new URL(url);
+  // Keep query params as fallback for workflows reading webhook query instead of JSON body.
+  target.searchParams.set("message", message);
+  target.searchParams.set("task", task);
+  target.searchParams.set("by", user);
+
+  fetch(target.toString(), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ message, task, by: user })
+  }).then(async (resp) => {
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      console.log("[chaos][webhook] non-2xx:", resp.status, body.slice(0, 300));
+      return;
+    }
+    console.log("[chaos][webhook] sent:", JSON.stringify({ status: resp.status, task, by: user }));
   }).catch((e) => {
     console.log("[chaos][webhook] error:", e?.message || e);
   });
