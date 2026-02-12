@@ -36,11 +36,9 @@ socket.on("state", (s) => {
   // toast
   if (s.toast) showToast(s.toast);
 
-  // chaos
-  if (s.chaosLast || s.chaos) {
-    const c = s.chaos || s.chaosLast;
-    if (c?.text) chaos.textContent = c.text;
-  }
+  // chaos: always overwrite text so clearchaos can blank the field immediately
+  const c = s.chaos || s.chaosLast;
+  chaos.textContent = c?.text || "";
 
   // leaderboards
   const lbs = s.leaderboards || {};
