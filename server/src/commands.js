@@ -24,16 +24,27 @@ function sendChaosTaskWebhook(env, task, user) {
   const url = String(env?.CHAOS_TASK_WEBHOOK_URL || "").trim();
   if (!url) return;
   const message = `😵‍💫💥CHAOS TASK: ${task} 😵‍💫💥`;
+  const messageAscii = `CHAOS TASK: ${task}`;
   const target = new URL(url);
   // Keep query params as fallback for workflows reading webhook query instead of JSON body.
   target.searchParams.set("message", message);
+  target.searchParams.set("text", message);
+  target.searchParams.set("content", message);
+  target.searchParams.set("message_ascii", messageAscii);
   target.searchParams.set("task", task);
   target.searchParams.set("by", user);
 
   fetch(target.toString(), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ message, task, by: user })
+    body: JSON.stringify({
+      message,
+      text: message,
+      content: message,
+      message_ascii: messageAscii,
+      task,
+      by: user
+    })
   }).then(async (resp) => {
     if (!resp.ok) {
       const body = await resp.text().catch(() => "");
