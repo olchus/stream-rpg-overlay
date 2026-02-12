@@ -23,6 +23,12 @@ const CHAOS_TASKS = [
 function sendChaosTaskWebhook(env, task, user) {
   const url = String(env?.CHAOS_TASK_WEBHOOK_URL || "").trim();
   if (!url) return;
+  const secret = String(
+    env?.CHAOS_TASK_WEBHOOK_SECRET ||
+    env?.CHAOS_WEBHOOK_SECRET ||
+    env?.CLOUDBOT_WEBHOOK_SECRET ||
+    ""
+  ).trim();
   const message = `😵‍💫💥CHAOS TASK: ${task} 😵‍💫💥`;
   const messageAscii = `CHAOS TASK: ${task}`;
   const target = new URL(url);
@@ -34,9 +40,12 @@ function sendChaosTaskWebhook(env, task, user) {
   target.searchParams.set("task", task);
   target.searchParams.set("by", user);
 
+  const headers = { "content-type": "application/json" };
+  if (secret) headers["x-chaos-secret"] = secret;
+
   fetch(target.toString(), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify({
       message,
       text: message,
