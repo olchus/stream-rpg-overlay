@@ -2,6 +2,29 @@
 
 Ten dokument opisuje wszystkie komendy, ktore mozna wpisac na czacie i ktore sa obslugiwane przez aplikacje.
 
+## Local dev: admin panel
+
+Minimalny panel admina jest serwowany z backendu pod `/admin` i korzysta z API `/api/admin/*`.
+
+1. Ustaw w `.env`:
+   - `PORT=3001`
+   - `ADMIN_API_TOKEN=<dlugi_losowy_token>`
+   - (opcjonalnie na lokalu) `KICK_ENABLED=false`, `TIPPLY_WEBHOOK_ENABLED=false`
+2. Uruchom aplikacje:
+   - lokalnie: `npm install && npm run dev`
+   - Docker: `docker compose -f docker-compose.local.yml up --build`
+3. Sprawdz endpointy:
+   - health: `http://localhost:3001/health`
+   - overlay: `http://localhost:3001/overlay`
+   - admin panel: `http://localhost:3001/admin`
+4. API admina wymaga headera Bearer:
+   - `Authorization: Bearer <ADMIN_API_TOKEN>`
+   - opcjonalnie dla audytu: `X-Admin-Actor: twoj_login`
+   - przyklad:
+     `curl -X POST http://localhost:3001/api/admin/pause -H "Authorization: Bearer <ADMIN_API_TOKEN>"`
+
+Zmiany z panelu sa broadcastowane przez Socket.IO, wiec overlay odswieza sie od razu.
+
 ## Role i uprawnienia
 
 - `viewer`: kazdy zwykly widz.

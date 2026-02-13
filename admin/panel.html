@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stream RPG Admin Panel</title>
+    <link rel="stylesheet" href="./style.css?v=20260213-2" />
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <main class="app">
+      <header class="card panelHeader">
+        <div>
+          <h1>Stream RPG Admin Panel</h1>
+          <p>Control runtime state without using chat commands.</p>
+        </div>
+        <button id="logoutBtn" type="button" class="dangerBtn">Logout</button>
+      </header>
+
+      <section class="card">
+        <h2>Current State</h2>
+        <div class="stats">
+          <div><span>Boss HP</span><strong id="bossHp">--</strong></div>
+          <div><span>Boss Max HP</span><strong id="bossMaxHp">--</strong></div>
+          <div><span>Phase</span><strong id="phase">--</strong></div>
+          <div><span>Paused</span><strong id="paused">--</strong></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Actions</h2>
+        <div class="actions">
+          <button id="pauseBtn" type="button">Pause</button>
+          <button id="resumeBtn" type="button">Resume</button>
+          <button id="resetXpBtn" type="button">Reset XP (all users)</button>
+          <button id="seedUsersBtn" type="button">Add 3 test users</button>
+          <button id="refreshBtn" type="button">Refresh</button>
+        </div>
+
+        <form id="addXpForm" class="formRow formRowAddXp">
+          <label for="xpUserInput">Add XP to user</label>
+          <input id="xpUserInput" type="text" placeholder="username" required />
+          <input id="xpAmountInput" type="number" min="1" step="1" placeholder="xp" required />
+          <button type="submit">Add XP</button>
+        </form>
+
+        <form id="setHpForm" class="formRow">
+          <label for="hpInput">Set Boss HP</label>
+          <input id="hpInput" type="number" min="0" step="1" required />
+          <button type="submit">Apply HP</button>
+        </form>
+
+        <form id="setPhaseForm" class="formRow">
+          <label for="phaseInput">Set Phase</label>
+          <input id="phaseInput" type="number" min="1" step="1" required />
+          <button type="submit">Apply Phase</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Log</h2>
+        <pre id="log">Ready.</pre>
+      </section>
+
+      <section class="card">
+        <h2>Players (XP ASC)</h2>
+        <div class="playersWrap">
+          <table class="playersTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Player</th>
+                <th>XP</th>
+                <th>DMG</th>
+              </tr>
+            </thead>
+            <tbody id="playersBody">
+              <tr>
+                <td colspan="4" class="mutedCell">No players yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="./admin.js?v=20260213-3"></script>
+  </body>
+</html>

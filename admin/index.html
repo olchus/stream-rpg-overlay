@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Login</title>
+    <link rel="stylesheet" href="./style.css?v=20260213-2" />
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <main class="authPage">
+      <section class="card authCard">
+        <h1>Admin Login</h1>
+        <p class="muted">Log in with email or login + password.</p>
+
+        <form id="loginForm">
+          <label for="identifierInput">Email lub login</label>
+          <input id="identifierInput" type="text" placeholder="login" autocomplete="username" required />
+
+          <label for="passwordInput">Hasło</label>
+          <input id="passwordInput" type="password" autocomplete="current-password" required />
+
+          <button id="loginBtn" type="submit">Zaloguj</button>
+        </form>
+
+        <p id="errorBox" class="errorBox" hidden></p>
+      </section>
+    </main>
+
+    <script src="./login.js?v=20260213-1"></script>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+name: stream-rpg-overlay-local
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      - PORT=3001
+      - KICK_ENABLED=false
+      - TIPPLY_WEBHOOK_ENABLED=false
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

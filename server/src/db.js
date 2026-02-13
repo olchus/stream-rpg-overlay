@@ -30,6 +30,17 @@ export function initDb() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts_ms);
+
+    CREATE TABLE IF NOT EXISTS admin_audit (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts_ms INTEGER NOT NULL,
+      actor TEXT NOT NULL,
+      action TEXT NOT NULL,
+      payload_json TEXT,
+      ip TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_ts ON admin_audit(ts_ms);
   `);
 
   const userColumns = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
@@ -86,6 +97,30 @@ export function initDb() {
     DELETE FROM events WHERE ts_ms < ?
   `);
 
+  const addAdminAudit = db.prepare(`
+    INSERT INTO admin_audit (ts_ms, actor, action, payload_json, ip)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  const usersByXpAscWithDmg = db.prepare(`
+    SELECT
+      u.username,
+      u.xp,
+      u.level,
+      COALESCE(SUM(
+        CASE
+          WHEN e.kind IN ('chat_attack','sub_hit','donation_hit','follow_hit','kick_gift')
+            THEN e.amount
+          ELSE 0
+        END
+      ), 0) AS dmg
+    FROM users u
+    LEFT JOIN events e ON e.username = u.username
+    GROUP BY u.username, u.xp, u.level
+    ORDER BY u.xp ASC, u.username ASC
+    LIMIT ?
+  `);
+
   return {
     db,
     getUser,
@@ -95,6 +130,8 @@ export function initDb() {
     topUsersByXp,
     topHittersToday,
     topHittersInRange,
-    resetDaily
+    resetDaily,
+    addAdminAudit,
+    usersByXpAscWithDmg
   };
 }

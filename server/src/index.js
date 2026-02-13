@@ -22,6 +22,7 @@ import {
 import { connectKick } from "./kick.js";
 import { nowMs, safeInt, safeNumber, normalizeUsername } from "./util.js";
 import { registerWebhooks } from "./webhooks.js";
+import { registerAdminApi } from "./admin.js";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -186,6 +187,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const overlayDir = path.join(__dirname, "..", "..", "overlay");
+const adminDir = path.join(__dirname, "..", "..", "admin");
 app.use("/overlay", express.static(overlayDir));
 
 // Health endpoint
@@ -253,6 +255,18 @@ registerWebhooks(app, {
   getLeaderboards,
   getPhaseWinners
 });
+
+registerAdminApi(app, {
+  env,
+  state,
+  db: dbh,
+  broadcastState,
+  getLeaderboards,
+  updateUser,
+  adminDir
+});
+
+app.use("/admin", express.static(adminDir));
 
 registerTipplyWebhook(app, {
   env,
