@@ -80,6 +80,24 @@ Jak aplikacja rozpoznaje role:
 - Uwaga:
   - to celowo "troll heal": podnosi HP bossa
 
+### `!bosshp`
+
+- Dostepna dla: `viewer`, `mod`, `admin`
+- Dzialanie:
+  - zwraca aktualne HP bossa na czat:
+    - `Boss HP: <hp>/<max> (phase <n>)`
+- Uwaga:
+  - komenda informacyjna, dziala rowniez gdy gra jest w `paused`
+
+### `!xp`
+
+- Dostepna dla: `viewer`, `mod`, `admin`
+- Dzialanie:
+  - zwraca XP i level autora komendy na czat:
+    - `<user>: <xp> XP (lvl <level>)`
+- Uwaga:
+  - komenda informacyjna, dziala rowniez gdy gra jest w `paused`
+
 ### `!stats` (Kick)
 
 - Dostepna dla: `viewer`, `mod`, `admin`

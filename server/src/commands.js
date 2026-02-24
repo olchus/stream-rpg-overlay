@@ -111,13 +111,34 @@ export function handleCommand(ctx) {
     })
   );
 
-  if (ctx.state.paused && (ctx.role === "viewer")) {
-    return { ok: false, message: "paused" };
- }
-
   if (!cmd) return { ok: false, silent: true };
 
+  const viewerInfoCommands = new Set(["bosshp", "xp"]);
+  if (ctx.state.paused && (ctx.role === "viewer") && !viewerInfoCommands.has(cmdNorm)) {
+    return { ok: false, message: "paused" };
+  }
+
   // routing komend: viewer
+  if (cmdNorm === "bosshp") {
+    const hp = safeInt(ctx.state?.bossHp, 0);
+    const max = safeInt(ctx.state?.bossMaxHp, 0);
+    const phase = Math.max(1, safeInt(ctx.state?.phase, 1));
+    return {
+      ok: true,
+      message: `Boss HP: ${hp}/${max} (phase ${phase})`
+    };
+  }
+
+  if (cmdNorm === "xp") {
+    const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
+    const xp = safeInt(row?.xp, 0);
+    const level = Math.max(1, safeInt(row?.level, 1));
+    return {
+      ok: true,
+      message: `${user}: ${xp} XP (lvl ${level})`
+    };
+  }
+
   if (cmd === "attack") {
     if (ctx.state.paused) return { ok: false, message: "paused" };
 
