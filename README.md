@@ -6,6 +6,7 @@ Ten dokument opisuje wszystkie komendy, ktore mozna wpisac na czacie i ktore sa 
 
 Minimalny panel admina jest serwowany z backendu pod `/admin` i korzysta z API `/api/admin/*`.
 W deploymencie Docker panel wymaga, aby katalog `admin/` byl obecny w obrazie (COPY `admin ./admin`).
+W serwowaniu `/admin` unikamy redirectow `/admin -> /admin/`, bo przy niektorych regułach Cloudflare (np. normalizacja trailing slash) moze to powodowac petle przekierowan.
 
 1. Ustaw w `.env`:
    - `PORT=3001`

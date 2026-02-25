@@ -189,14 +189,18 @@ const __dirname = path.dirname(__filename);
 
 const overlayDir = path.join(__dirname, "..", "..", "overlay");
 const adminDir = path.join(__dirname, "..", "..", "admin");
+const adminIndexFile = path.join(adminDir, "index.html");
 if (!fs.existsSync(adminDir)) {
   console.log(`[admin] WARN: adminDir not found: ${adminDir}`);
 } else {
   console.log(`[admin] serving static from: ${adminDir}`);
 }
 
-app.get("/admin", (_req, res) => {
-  return res.redirect(301, "/admin/");
+app.get(["/admin", "/admin/"], (_req, res, next) => {
+  if (!fs.existsSync(adminIndexFile)) {
+    return next();
+  }
+  return res.sendFile(adminIndexFile);
 });
 
 app.use("/overlay", express.static(overlayDir));
@@ -277,7 +281,7 @@ registerAdminApi(app, {
   adminDir
 });
 
-app.use("/admin", express.static(adminDir));
+app.use("/admin", express.static(adminDir, { redirect: false }));
 
 registerTipplyWebhook(app, {
   env,
