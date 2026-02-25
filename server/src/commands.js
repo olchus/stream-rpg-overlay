@@ -74,7 +74,7 @@ function parseArgs(text) {
 
 export function handleCommand(ctx) {
   // ctx:
-  // { user, role, rawText, state, env, db, broadcastState, recordEvent, updateUser, getLeaderboards, auth }
+  // { user, role, rawText, isSub, state, env, db, broadcastState, recordEvent, updateUser, getLeaderboards, auth }
 //console.log("[cmd]", { user: ctx.user, role: ctx.role, rawText: ctx.rawText });
   const userRaw = ctx?.userRaw ?? ctx?.user ?? "";
   const cmdRaw = ctx?.cmdRaw ?? ctx?.rawText ?? "";
@@ -143,28 +143,41 @@ export function handleCommand(ctx) {
     if (ctx.state.paused) return { ok: false, message: "paused" };
 
     const dmgBase = safeInt(ctx.env.CHAT_ATTACK_DAMAGE, 5);
-    const dmg = clamp(dmgBase, 1, 9999);
+    const skillStart = Math.max(1, safeInt(ctx.env.SKILL_START, 1));
     const skillTryPerAttack = Math.max(0, safeInt(ctx.env.SKILL_TRY_PER_ATTACK, 1));
     const cooldownMs = safeInt(ctx.env.CHAT_ATTACK_COOLDOWN_MS, 60000);
     const now = nowMs();
     const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
     const lastAttackMs = row?.last_attack_ms ?? 0;
+    const userSkill = Math.max(skillStart, safeInt(row?.skill, skillStart));
+    const isSub = ctx.isSub === true;
+    const subBonus = isSub ? 5 : 0;
+    const dmg = clamp(dmgBase + userSkill + subBonus, 1, 9999);
 
     if (now - lastAttackMs < cooldownMs) {
       return { ok: false, silent: true };
     }
 
     const updated = ctx.updateUser(user, 2, now, null, { skillTriesAdd: skillTryPerAttack });
-    ctx.recordEvent(user, "chat_attack", dmg, "cloudbot");
+    const breakdown = `base ${dmgBase} + skill ${userSkill} + sub ${subBonus}`;
+    ctx.recordEvent(user, "chat_attack", dmg, JSON.stringify({
+      source: "cloudbot",
+      base: dmgBase,
+      skill: userSkill,
+      subBonus,
+      isSub,
+      total: dmg
+    }));
     const result = applyDamage(ctx.state, user, dmg, "cloudbot_attack");
     if (result.defeated) {
       ctx.state.phaseWinners = ctx.getPhaseWinners?.(ctx.state.phaseStartMs) || [];
       ctx.state.phaseStartMs = nowMs();
     }
 
+    const attackToast = `${user} !attack -> -${dmg} (${breakdown})`;
     const toast = updated?.skillUps > 0
-      ? `${user} skill up! (skill: ${updated.skill})`
-      : `${user} !attack -> -${dmg}`;
+      ? `${user} skill up! (skill: ${updated.skill}) | ${attackToast}`
+      : attackToast;
     ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast });
     return { ok: true };
   }

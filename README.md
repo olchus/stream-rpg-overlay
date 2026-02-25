@@ -57,6 +57,8 @@ Jak aplikacja rozpoznaje role:
 - Dostepna dla: `viewer`, `mod`, `admin`
 - Dzialanie:
   - zadaje obrazenia bossowi
+  - dmg liczone jest wzorem:
+    - `clamp(CHAT_ATTACK_DAMAGE + skill + (isSub ? 5 : 0), 1, 9999)`
   - daje `+2 XP`
   - daje progres skilla melee (`skillTries`) i moze wbic `skill up`
   - zapisuje timestamp ataku (`last_attack_ms`)
@@ -68,10 +70,13 @@ Jak aplikacja rozpoznaje role:
   - zapisywane jest `top 3` po XP jako `phaseWinners`
   - startuje nowa faza
 - Uwagi:
-  - na Kick (dokladnie `!attack`) dmg skaluje z levelem:
-    - `CHAT_ATTACK_DAMAGE + floor((level - 1) * 0.5)`
-  - w sciezce Cloudbot dmg to:
-    - `clamp(CHAT_ATTACK_DAMAGE, 1, 9999)`
+  - bonus sub (`+5`) dziala, gdy backend rozpozna suba:
+    - jawnie z `isSub` (`true/false`, `1/0`) w body/query webhooka
+    - albo po markerach `sub/subscriber` w `badges` / `roles`
+  - gdy brak informacji o subie, traktowane jest to jako `false` (brak bonusu)
+  - Cloudbot: dodaj `isSub` do webhooka komendy, np.:
+    - `.../api/cmd?secret=<SECRET>&user=<USER>&text=<TEXT>&level=<LEVEL>&isSub=<SUB_STATUS>`
+  - jesli Twoj Cloudbot nie ma zmiennej sub statusu, wysylaj `isSub=false`
 
 ### Skill (melee-style)
 
@@ -79,7 +84,7 @@ Jak aplikacja rozpoznaje role:
   - `skill` (start z `SKILL_START`, domyslnie `1`)
   - `skill_tries` (progres do nastepnego skilla)
 - Naliczanie:
-  - tylko dla `!attack` przez sciezke Cloudbot/webhook (`/api/cmd`)
+  - dla `!attack` przez sciezke Cloudbot/webhook (`/api/cmd`) oraz Kick chat
   - na kazdy atak dodawane jest `SKILL_TRY_PER_ATTACK` tries (domyslnie `1`)
 - Wymagane tries do kolejnego skilla:
   - `required = round(SKILL_BASE_TRIES * SKILL_GROWTH^(skill - SKILL_START))`

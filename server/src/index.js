@@ -20,7 +20,7 @@ import {
   saveStreamlabsToken
 } from "./streamlabsAuth.js";
 import { connectKick } from "./kick.js";
-import { nowMs, safeInt, safeNumber, normalizeUsername } from "./util.js";
+import { clamp, nowMs, safeInt, safeNumber, normalizeUsername } from "./util.js";
 import { registerWebhooks } from "./webhooks.js";
 import { registerAdminApi } from "./admin.js";
 import fs from "fs";
@@ -138,6 +138,72 @@ function parseKickGiftMessage(text, raw) {
   if (!looksLikeSystem && !looksLikeGift) return null;
 
   return { giver, kicks };
+}
+
+function parseBooleanFlag(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value !== "string") return null;
+
+  const text = value.trim().toLowerCase();
+  if (!text) return null;
+  if (["1", "true", "yes", "y", "on"].includes(text)) return true;
+  if (["0", "false", "no", "n", "off"].includes(text)) return false;
+  return null;
+}
+
+function hasSubMarker(value) {
+  if (value === null || value === undefined) return false;
+  if (Array.isArray(value)) return value.some(hasSubMarker);
+  if (typeof value === "object") {
+    return Object.entries(value).some(([k, v]) => hasSubMarker(k) || hasSubMarker(v));
+  }
+
+  const text = String(value).trim().toLowerCase();
+  if (!text) return false;
+  return ["sub", "subscriber", "subscription", "subscribed", "prime"].some((k) => text.includes(k));
+}
+
+function isKickSubscriber(raw) {
+  const directCandidates = [
+    raw?.isSub,
+    raw?.is_sub,
+    raw?.subscriber,
+    raw?.isSubscriber,
+    raw?.is_subscriber,
+    raw?.user?.isSub,
+    raw?.user?.is_sub,
+    raw?.user?.subscriber,
+    raw?.user?.isSubscriber,
+    raw?.user?.is_subscriber,
+    raw?.sender?.isSub,
+    raw?.sender?.is_sub,
+    raw?.sender?.subscriber,
+    raw?.sender?.isSubscriber,
+    raw?.sender?.is_subscriber
+  ];
+  for (const candidate of directCandidates) {
+    const parsed = parseBooleanFlag(candidate);
+    if (parsed !== null) return parsed;
+  }
+
+  const roleCandidates = [
+    raw?.role,
+    raw?.roles,
+    raw?.badges,
+    raw?.badge,
+    raw?.tags,
+    raw?.flags,
+    raw?.user?.role,
+    raw?.user?.roles,
+    raw?.user?.badges,
+    raw?.user?.badge,
+    raw?.sender?.role,
+    raw?.sender?.roles,
+    raw?.sender?.badges,
+    raw?.sender?.badge
+  ];
+  return roleCandidates.some(hasSubMarker);
 }
 
 function ensureUser(usernameRaw) {
@@ -352,17 +418,27 @@ function handleKickMessage({ user, text, raw }) {
     if (state.paused) return;
     const u = ensureUser(user);
     const now = nowMs();
+    const isSub = isKickSubscriber(raw);
 
     if (now - u.last_attack_ms < CHAT_ATTACK_COOLDOWN_MS) {
       // silent cooldown (żeby nie spamować)
       return;
     }
 
-    // damage scales a bit with level (hardcore)
-    const scaled = CHAT_ATTACK_DAMAGE + Math.floor((u.level - 1) * 0.5);
+    const userSkill = Math.max(SKILL_START, safeInt(u.skill, SKILL_START));
+    const subBonus = isSub ? 5 : 0;
+    const scaled = clamp(CHAT_ATTACK_DAMAGE + userSkill + subBonus, 1, 9999);
+    const skillTryPerAttack = Math.max(0, safeInt(env.SKILL_TRY_PER_ATTACK, 1));
 
-    updateUser(u.username, 2, now); // xp za aktywność
-    recordEvent(u.username, "chat_attack", scaled, "kick");
+    updateUser(u.username, 2, now, null, { skillTriesAdd: skillTryPerAttack }); // xp za aktywność
+    recordEvent(u.username, "chat_attack", scaled, JSON.stringify({
+      source: "kick",
+      base: CHAT_ATTACK_DAMAGE,
+      skill: userSkill,
+      subBonus,
+      isSub,
+      total: scaled
+    }));
 
     const result = applyDamage(state, u.username, scaled, "kick_chat");
     if (result.defeated) {
@@ -401,6 +477,7 @@ function handleKickMessage({ user, text, raw }) {
   const result = handleCommand({
     user,
     role,
+    isSub: isKickSubscriber(raw),
     rawText: t,
     userRaw: user,
     roleRaw: role,
