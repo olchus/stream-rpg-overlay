@@ -23,6 +23,7 @@ import { connectKick } from "./kick.js";
 import { nowMs, safeInt, safeNumber, normalizeUsername } from "./util.js";
 import { registerWebhooks } from "./webhooks.js";
 import { registerAdminApi } from "./admin.js";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -188,6 +189,16 @@ const __dirname = path.dirname(__filename);
 
 const overlayDir = path.join(__dirname, "..", "..", "overlay");
 const adminDir = path.join(__dirname, "..", "..", "admin");
+if (!fs.existsSync(adminDir)) {
+  console.log(`[admin] WARN: adminDir not found: ${adminDir}`);
+} else {
+  console.log(`[admin] serving static from: ${adminDir}`);
+}
+
+app.get("/admin", (_req, res) => {
+  return res.redirect(301, "/admin/");
+});
+
 app.use("/overlay", express.static(overlayDir));
 
 // Health endpoint

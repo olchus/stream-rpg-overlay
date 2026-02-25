@@ -17,6 +17,7 @@ RUN npm ci || npm install
 
 COPY server ./server
 COPY overlay ./overlay
+COPY admin ./admin
 
 # run as non-root for puppeteer/chromium sandbox
 RUN mkdir -p /app/data && chown -R node:node /app
