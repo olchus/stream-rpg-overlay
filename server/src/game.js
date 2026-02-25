@@ -90,3 +90,32 @@ export function awardXp(xpCurrent, add) {
   const level = computeLevelFromXp(xp);
   return { xp, level };
 }
+
+export function requiredSkillTries(skillCurrent, cfg = {}) {
+  const skillStart = Math.max(1, safeInt(cfg.SKILL_START, 1));
+  const baseTries = Math.max(1, safeInt(cfg.SKILL_BASE_TRIES, 40));
+  const growth = Math.max(1.01, safeNumber(cfg.SKILL_GROWTH, 1.16));
+  const skill = Math.max(skillStart, safeInt(skillCurrent, skillStart));
+  const steps = skill - skillStart;
+  const required = Math.round(baseTries * Math.pow(growth, steps));
+  return clamp(required, 1, 2_000_000_000);
+}
+
+export function awardSkill(skillCurrent, skillTriesCurrent, addTries, cfg = {}) {
+  const skillStart = Math.max(1, safeInt(cfg.SKILL_START, 1));
+  let skill = Math.max(skillStart, safeInt(skillCurrent, skillStart));
+  let skillTries = clamp(safeInt(skillTriesCurrent, 0), 0, 2_000_000_000);
+  const triesToAdd = clamp(safeInt(addTries, 0), 0, 2_000_000_000);
+  skillTries = clamp(skillTries + triesToAdd, 0, 2_000_000_000);
+
+  let skillUps = 0;
+  while (skill < 9999) {
+    const need = requiredSkillTries(skill, cfg);
+    if (skillTries < need) break;
+    skillTries -= need;
+    skill++;
+    skillUps++;
+  }
+
+  return { skill, skillTries, skillUps };
+}

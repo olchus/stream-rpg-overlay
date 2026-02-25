@@ -13,13 +13,30 @@ const playersBodyEl = document.getElementById("playersBody");
 const pauseBtn = document.getElementById("pauseBtn");
 const resumeBtn = document.getElementById("resumeBtn");
 const resetXpBtn = document.getElementById("resetXpBtn");
+const resetSkillsBtn = document.getElementById("resetSkillsBtn");
 const seedUsersBtn = document.getElementById("seedUsersBtn");
 const setHpForm = document.getElementById("setHpForm");
 const setPhaseForm = document.getElementById("setPhaseForm");
 const addXpForm = document.getElementById("addXpForm");
+const toastEl = document.getElementById("toast");
+
+let toastTimer = null;
 
 function setLog(message) {
   logEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+}
+
+function showToast(message, type = "ok") {
+  if (!toastEl) return;
+  if (toastTimer) clearTimeout(toastTimer);
+
+  toastEl.hidden = false;
+  toastEl.className = `toast ${type === "error" ? "toastError" : "toastOk"}`;
+  toastEl.textContent = String(message || "");
+
+  toastTimer = window.setTimeout(() => {
+    toastEl.hidden = true;
+  }, 2800);
 }
 
 function renderState(state) {
@@ -36,12 +53,16 @@ function esc(value) {
     .replaceAll(">", "&gt;");
 }
 
+function escAttr(value) {
+  return esc(value).replaceAll("\"", "&quot;").replaceAll("'", "&#39;");
+}
+
 function renderPlayers(players) {
   const rows = Array.isArray(players) ? players : [];
   if (!rows.length) {
     playersBodyEl.innerHTML = `
       <tr>
-        <td colspan="4" class="mutedCell">No players yet.</td>
+        <td colspan="6" class="mutedCell">No players yet.</td>
       </tr>
     `;
     return;
@@ -52,7 +73,15 @@ function renderPlayers(players) {
       <td>${i + 1}</td>
       <td>${esc(player.username)}</td>
       <td>${Number(player.xp || 0)}</td>
+      <td>${Number(player.skill || 0)}</td>
       <td>${Number(player.dmg || 0)}</td>
+      <td>
+        <div class="rowActions">
+          <button type="button" class="tinyBtn" data-skill-action="inc" data-user="${escAttr(player.username)}">Skill +1</button>
+          <button type="button" class="tinyBtn" data-skill-action="dec" data-user="${escAttr(player.username)}">Skill -1</button>
+          <button type="button" class="tinyBtn dangerBtn" data-skill-action="reset" data-user="${escAttr(player.username)}">Reset skill</button>
+        </div>
+      </td>
     </tr>
   `).join("");
 }
@@ -130,16 +159,69 @@ resetXpBtn.addEventListener("click", async () => {
   if (!proceed) return;
   try {
     await runAction("/users/resetxp");
+    showToast("XP reset completed");
   } catch (e) {
     setLog(`error: ${e.message}`);
+    showToast(e.message, "error");
+  }
+});
+
+resetSkillsBtn.addEventListener("click", async () => {
+  const proceed = window.confirm("Reset skill for all users?");
+  if (!proceed) return;
+
+  const phrase = window.prompt("Type RESET to confirm global skill reset:", "");
+  if (phrase !== "RESET") {
+    setLog("cancelled: global skill reset confirmation failed");
+    showToast("Reset skills cancelled", "error");
+    return;
+  }
+
+  try {
+    const data = await apiFetch("POST", "/skills/reset-all");
+    const changed = Number(data?.summary?.changed || 0);
+    setLog(`ok: /skills/reset-all (${changed} users)`);
+    showToast(`Skills reset for ${changed} users`);
+    await refreshState();
+  } catch (e) {
+    setLog(`error: ${e.message}`);
+    showToast(e.message, "error");
   }
 });
 
 seedUsersBtn.addEventListener("click", async () => {
   try {
     await runAction("/users/seedtest");
+    showToast("Test users added");
   } catch (e) {
     setLog(`error: ${e.message}`);
+    showToast(e.message, "error");
+  }
+});
+
+playersBodyEl.addEventListener("click", async (ev) => {
+  const button = ev.target.closest("button[data-skill-action]");
+  if (!button) return;
+
+  const username = String(button.dataset.user || "").trim();
+  const action = String(button.dataset.skillAction || "").trim();
+  if (!username || !action) return;
+
+  const label =
+    action === "inc" ? "Skill +1" :
+    action === "dec" ? "Skill -1" :
+    "Reset skill";
+  const route = `/users/${encodeURIComponent(username)}/skill/${encodeURIComponent(action)}`;
+
+  button.disabled = true;
+  try {
+    await runAction(route);
+    showToast(`${username}: ${label}`);
+  } catch (e) {
+    setLog(`error: ${e.message}`);
+    showToast(e.message, "error");
+  } finally {
+    button.disabled = false;
   }
 });
 

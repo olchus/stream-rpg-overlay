@@ -7,7 +7,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 
 import { initDb } from "./db.js";
-import { createGameState, applyDamage, awardXp, maybeChaos } from "./game.js";
+import { createGameState, applyDamage, awardXp, awardSkill, maybeChaos } from "./game.js";
 import { connectStreamlabs } from "./streamlabs.js";
 import { registerTipplyWebhook, startTipplyGoalPoller } from "./tipply.js";
 import {
@@ -59,6 +59,10 @@ const DONATE_DMG_MULT = safeNumber(env.DONATE_DMG_MULT, 2.5);
 
 const CHAT_ATTACK_COOLDOWN_MS = safeInt(env.CHAT_ATTACK_COOLDOWN_MS, 60000);
 const CHAT_HEAL_COOLDOWN_MS = safeInt(env.CHAT_HEAL_COOLDOWN_MS, 120000);
+const SKILL_START = Math.max(1, safeInt(env.SKILL_START, 1));
+const SKILL_BASE_TRIES = Math.max(1, safeInt(env.SKILL_BASE_TRIES, 40));
+const SKILL_GROWTH = Math.max(1.01, safeNumber(env.SKILL_GROWTH, 1.16));
+const SKILL_CFG = { SKILL_START, SKILL_BASE_TRIES, SKILL_GROWTH };
 
 const CHAOS_ENABLED = (env.CHAOS_ENABLED || "true").toLowerCase() === "true";
 const CHAOS_DONATE_THRESHOLD = safeInt(env.CHAOS_DONATE_THRESHOLD, 10);
@@ -140,27 +144,40 @@ function ensureUser(usernameRaw) {
   const username = normalizeUsername(usernameRaw);
   const row = dbh.getUser.get(username);
   if (row) return row;
-  const init = { username, xp: 0, level: 1, last_attack_ms: 0, last_heal_ms: 0 };
+  const init = { username, xp: 0, level: 1, skill: SKILL_START, skill_tries: 0, last_attack_ms: 0, last_heal_ms: 0 };
   dbh.upsertUser.run(init);
   return init;
 }
 
-function updateUser(username, xpAdd, maybeLastAttackMs = null, maybeLastHealMs = null) {
+function updateUser(username, xpAdd, maybeLastAttackMs = null, maybeLastHealMs = null, extra = {}) {
   const user = ensureUser(username);
-  const next = awardXp(user.xp, xpAdd);
+  const nextXp = awardXp(user.xp, xpAdd);
+  const skillTriesAdd = Math.max(0, safeInt(extra?.skillTriesAdd, 0));
+  const nextSkill = awardSkill(user.skill, user.skill_tries, skillTriesAdd, SKILL_CFG);
 
   const last_attack_ms = maybeLastAttackMs !== null ? maybeLastAttackMs : user.last_attack_ms;
   const last_heal_ms = maybeLastHealMs !== null ? maybeLastHealMs : user.last_heal_ms;
 
   dbh.upsertUser.run({
     username: user.username,
-    xp: next.xp,
-    level: next.level,
+    xp: nextXp.xp,
+    level: nextXp.level,
+    skill: nextSkill.skill,
+    skill_tries: nextSkill.skillTries,
     last_attack_ms,
     last_heal_ms
   });
 
-  return { username: user.username, xp: next.xp, level: next.level, last_attack_ms, last_heal_ms };
+  return {
+    username: user.username,
+    xp: nextXp.xp,
+    level: nextXp.level,
+    skill: nextSkill.skill,
+    skill_tries: nextSkill.skillTries,
+    skillUps: nextSkill.skillUps,
+    last_attack_ms,
+    last_heal_ms
+  };
 }
 
 function recordEvent(username, kind, amount = 0, meta = "") {

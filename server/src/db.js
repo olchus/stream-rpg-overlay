@@ -4,6 +4,10 @@ import path from "path";
 
 const DATA_DIR = process.env.DATA_DIR || "/app/data";
 const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, "game.sqlite");
+const SKILL_START_DEFAULT = (() => {
+  const n = Number(process.env.SKILL_START);
+  return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1;
+})();
 
 export function initDb() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -16,6 +20,8 @@ export function initDb() {
       username TEXT PRIMARY KEY,
       xp INTEGER NOT NULL DEFAULT 0,
       level INTEGER NOT NULL DEFAULT 1,
+      skill INTEGER NOT NULL DEFAULT ${SKILL_START_DEFAULT},
+      skill_tries INTEGER NOT NULL DEFAULT 0,
       last_attack_ms INTEGER NOT NULL DEFAULT 0,
       last_heal_ms INTEGER NOT NULL DEFAULT 0
     );
@@ -47,18 +53,30 @@ export function initDb() {
   if (!userColumns.includes("last_heal_ms")) {
     db.exec("ALTER TABLE users ADD COLUMN last_heal_ms INTEGER NOT NULL DEFAULT 0;");
   }
+  if (!userColumns.includes("skill")) {
+    db.exec(`ALTER TABLE users ADD COLUMN skill INTEGER NOT NULL DEFAULT ${SKILL_START_DEFAULT};`);
+  }
+  if (!userColumns.includes("skill_tries")) {
+    db.exec("ALTER TABLE users ADD COLUMN skill_tries INTEGER NOT NULL DEFAULT 0;");
+  }
 
   const upsertUser = db.prepare(`
-    INSERT INTO users (username, xp, level, last_attack_ms, last_heal_ms)
-    VALUES (@username, @xp, @level, @last_attack_ms, @last_heal_ms)
+    INSERT INTO users (username, xp, level, skill, skill_tries, last_attack_ms, last_heal_ms)
+    VALUES (@username, @xp, @level, @skill, @skill_tries, @last_attack_ms, @last_heal_ms)
     ON CONFLICT(username) DO UPDATE SET
       xp=excluded.xp,
       level=excluded.level,
+      skill=excluded.skill,
+      skill_tries=excluded.skill_tries,
       last_attack_ms=excluded.last_attack_ms,
       last_heal_ms=excluded.last_heal_ms
   `);
 
-  const getUser = db.prepare(`SELECT username, xp, level, last_attack_ms, last_heal_ms FROM users WHERE username=?`);
+  const getUser = db.prepare(`
+    SELECT username, xp, level, skill, skill_tries, last_attack_ms, last_heal_ms
+    FROM users
+    WHERE username=?
+  `);
 
   const setLastAttack = db.prepare(`UPDATE users SET last_attack_ms=? WHERE username=?`);
 
@@ -68,7 +86,7 @@ export function initDb() {
   `);
 
   const topUsersByXp = db.prepare(`
-    SELECT username, xp, level FROM users
+    SELECT username, xp, level, skill FROM users
     ORDER BY xp DESC
     LIMIT ?
   `);
@@ -102,11 +120,24 @@ export function initDb() {
     VALUES (?, ?, ?, ?, ?)
   `);
 
+  const updateUserSkill = db.prepare(`
+    UPDATE users
+    SET skill=@skill, skill_tries=@skill_tries
+    WHERE username=@username
+  `);
+
+  const resetAllUserSkills = db.prepare(`
+    UPDATE users
+    SET skill=?, skill_tries=0
+  `);
+
   const usersByXpAscWithDmg = db.prepare(`
     SELECT
       u.username,
       u.xp,
       u.level,
+      u.skill,
+      u.skill_tries,
       COALESCE(SUM(
         CASE
           WHEN e.kind IN ('chat_attack','sub_hit','donation_hit','follow_hit','kick_gift')
@@ -116,7 +147,7 @@ export function initDb() {
       ), 0) AS dmg
     FROM users u
     LEFT JOIN events e ON e.username = u.username
-    GROUP BY u.username, u.xp, u.level
+    GROUP BY u.username, u.xp, u.level, u.skill, u.skill_tries
     ORDER BY u.xp ASC, u.username ASC
     LIMIT ?
   `);
@@ -132,6 +163,8 @@ export function initDb() {
     topHittersInRange,
     resetDaily,
     addAdminAudit,
+    updateUserSkill,
+    resetAllUserSkills,
     usersByXpAscWithDmg
   };
 }

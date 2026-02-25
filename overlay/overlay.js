@@ -64,7 +64,10 @@ socket.on("state", (s) => {
     : `<div class="muted">no data yet</div>`;
 
   topXp.innerHTML = xp.length
-    ? xp.slice(0, 5).map((r, i) => `<div class="lb"><span class="rank">#${i+1}</span><span class="name">${esc(r.username)}</span><span class="val">lvl ${r.level} / ${r.xp}xp</span></div>`).join("")
+    ? xp.slice(0, 5).map((r, i) => {
+        const skill = Number.isFinite(Number(r.skill)) ? Math.trunc(Number(r.skill)) : "-";
+        return `<div class="lb"><span class="rank">#${i+1}</span><span class="name">${esc(r.username)}</span><span class="val">${r.xp}xp / sk${skill}</span></div>`;
+      }).join("")
     : `<div class="muted">no data yet</div>`;
 
   // phase winners
@@ -83,7 +86,8 @@ socket.on("state", (s) => {
     ? winners.map((w, i) => {
         const medals = ['🥇', '🥈', '🥉'];
         const medal = medals[i] || '•';
-        return `<div class="winner"><span class="medal">${medal}</span><span class="name">${esc(w.username)} </span><span class="level">lvl ${w.level} / ${w.xp ?? 0}xp</span></div>`;
+        const skill = Number.isFinite(Number(w.skill)) ? Math.trunc(Number(w.skill)) : "-";
+        return `<div class="winner"><span class="medal">${medal}</span><span class="name">${esc(w.username)} </span><span class="level">${w.xp ?? 0}xp / sk${skill}</span></div>`;
       }).join("")
     : `<div class="muted">no winners yet</div>`;
 });

@@ -33,6 +33,7 @@
           <button id="pauseBtn" type="button">Pause</button>
           <button id="resumeBtn" type="button">Resume</button>
           <button id="resetXpBtn" type="button">Reset XP (all users)</button>
+          <button id="resetSkillsBtn" type="button" class="dangerBtn">Reset skills</button>
           <button id="seedUsersBtn" type="button">Add 3 test users</button>
           <button id="refreshBtn" type="button">Refresh</button>
         </div>
@@ -71,12 +72,14 @@
                 <th>#</th>
                 <th>Player</th>
                 <th>XP</th>
+                <th>Skill</th>
                 <th>DMG</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="playersBody">
               <tr>
-                <td colspan="4" class="mutedCell">No players yet.</td>
+                <td colspan="6" class="mutedCell">No players yet.</td>
               </tr>
             </tbody>
           </table>
@@ -84,6 +87,8 @@
       </section>
     </main>
 
-    <script src="./admin.js?v=20260213-3"></script>
+    <div id="toast" class="toast" hidden></div>
+
+    <script src="./admin.js?v=20260225-1"></script>
   </body>
 </html>

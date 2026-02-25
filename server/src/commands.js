@@ -144,6 +144,7 @@ export function handleCommand(ctx) {
 
     const dmgBase = safeInt(ctx.env.CHAT_ATTACK_DAMAGE, 5);
     const dmg = clamp(dmgBase, 1, 9999);
+    const skillTryPerAttack = Math.max(0, safeInt(ctx.env.SKILL_TRY_PER_ATTACK, 1));
     const cooldownMs = safeInt(ctx.env.CHAT_ATTACK_COOLDOWN_MS, 60000);
     const now = nowMs();
     const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
@@ -153,7 +154,7 @@ export function handleCommand(ctx) {
       return { ok: false, silent: true };
     }
 
-    ctx.updateUser(user, 2, now);
+    const updated = ctx.updateUser(user, 2, now, null, { skillTriesAdd: skillTryPerAttack });
     ctx.recordEvent(user, "chat_attack", dmg, "cloudbot");
     const result = applyDamage(ctx.state, user, dmg, "cloudbot_attack");
     if (result.defeated) {
@@ -161,7 +162,10 @@ export function handleCommand(ctx) {
       ctx.state.phaseStartMs = nowMs();
     }
 
-    ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `${user} !attack → -${dmg}` });
+    const toast = updated?.skillUps > 0
+      ? `${user} skill up! (skill: ${updated.skill})`
+      : `${user} !attack -> -${dmg}`;
+    ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast });
     return { ok: true };
   }
 

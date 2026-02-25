@@ -143,6 +143,11 @@ button:hover {
   background: #1e40af;
 }
 
+button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .dangerBtn {
   background: #b91c1c;
   border-color: #b91c1c;
@@ -204,12 +209,52 @@ button:hover {
 .playersTable th:nth-child(3),
 .playersTable td:nth-child(3),
 .playersTable th:nth-child(4),
-.playersTable td:nth-child(4) {
+.playersTable td:nth-child(4),
+.playersTable th:nth-child(5),
+.playersTable td:nth-child(5),
+.playersTable th:nth-child(6),
+.playersTable td:nth-child(6) {
   text-align: right;
 }
 
 .mutedCell {
   color: #94a3b8;
+}
+
+.rowActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tinyBtn {
+  font-size: 0.8rem;
+  padding: 4px 8px;
+}
+
+.toast {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 1000;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 10px 14px;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, 0.6);
+  max-width: min(92vw, 360px);
+}
+
+.toastOk {
+  border-color: #14532d;
+  background: rgba(20, 83, 45, 0.9);
+}
+
+.toastError {
+  border-color: #991b1b;
+  background: rgba(127, 29, 29, 0.9);
 }
 
 @media (max-width: 680px) {

@@ -27,6 +27,10 @@ W serwowaniu `/admin` unikamy redirectow `/admin -> /admin/`, bo przy niektorych
 
 Zmiany z panelu sa broadcastowane przez Socket.IO, wiec overlay odswieza sie od razu.
 
+Symulacja tempa skilla:
+- `npm run skill:sim`
+- albo z parametrami: `node scripts/skill-sim.js 1000 50`
+
 ## Role i uprawnienia
 
 - `viewer`: kazdy zwykly widz.
@@ -54,6 +58,7 @@ Jak aplikacja rozpoznaje role:
 - Dzialanie:
   - zadaje obrazenia bossowi
   - daje `+2 XP`
+  - daje progres skilla melee (`skillTries`) i moze wbic `skill up`
   - zapisuje timestamp ataku (`last_attack_ms`)
   - zapisuje event `chat_attack`
 - Cooldown:
@@ -67,6 +72,25 @@ Jak aplikacja rozpoznaje role:
     - `CHAT_ATTACK_DAMAGE + floor((level - 1) * 0.5)`
   - w sciezce Cloudbot dmg to:
     - `clamp(CHAT_ATTACK_DAMAGE, 1, 9999)`
+
+### Skill (melee-style)
+
+- Pola gracza:
+  - `skill` (start z `SKILL_START`, domyslnie `1`)
+  - `skill_tries` (progres do nastepnego skilla)
+- Naliczanie:
+  - tylko dla `!attack` przez sciezke Cloudbot/webhook (`/api/cmd`)
+  - na kazdy atak dodawane jest `SKILL_TRY_PER_ATTACK` tries (domyslnie `1`)
+- Wymagane tries do kolejnego skilla:
+  - `required = round(SKILL_BASE_TRIES * SKILL_GROWTH^(skill - SKILL_START))`
+  - domyslne: `SKILL_BASE_TRIES=40`, `SKILL_GROWTH=1.16`
+  - przykladowe tempo (domyslnie):
+    - skill `1 -> 2`: ok. `40` atakow
+    - skill `20 -> 21`: ok. `671` atakow
+    - skill `30 -> 31`: ok. `2960` atakow
+- Skill up:
+  - gdy `skill_tries >= required(skill)`: `skill++` i nadwyzka tries zostaje
+  - overlay dostaje toast: `<user> skill up! (skill: X)`
 
 ### `!heal`
 

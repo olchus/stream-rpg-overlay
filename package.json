@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "node server/src/index.js",
-    "start": "node server/src/index.js"
+    "start": "node server/src/index.js",
+    "skill:sim": "node scripts/skill-sim.js 1000 100"
   },
   "dependencies": {
     "better-sqlite3": "^11.1.0",
