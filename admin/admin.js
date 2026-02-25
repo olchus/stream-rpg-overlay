@@ -9,6 +9,7 @@ const phaseEl = document.getElementById("phase");
 const pausedEl = document.getElementById("paused");
 const logEl = document.getElementById("log");
 const playersBodyEl = document.getElementById("playersBody");
+const playersHeadEl = document.querySelector(".playersTable thead");
 
 const pauseBtn = document.getElementById("pauseBtn");
 const resumeBtn = document.getElementById("resumeBtn");
@@ -21,6 +22,8 @@ const addXpForm = document.getElementById("addXpForm");
 const toastEl = document.getElementById("toast");
 
 let toastTimer = null;
+let playersCache = [];
+const sortState = { key: "xp", dir: "asc" };
 
 function setLog(message) {
   logEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -57,14 +60,61 @@ function escAttr(value) {
   return esc(value).replaceAll("\"", "&quot;").replaceAll("'", "&#39;");
 }
 
+function getSortDirectionForNewKey(key) {
+  return "asc";
+}
+
+function applyPlayersSort(players) {
+  const rows = Array.isArray(players) ? [...players] : [];
+  const factor = sortState.dir === "desc" ? -1 : 1;
+
+  rows.sort((a, b) => {
+    let cmp = 0;
+    if (sortState.key === "username") {
+      const aa = String(a?.username || "");
+      const bb = String(b?.username || "");
+      cmp = aa.localeCompare(bb, undefined, { sensitivity: "base", numeric: true });
+    } else {
+      const aa = Number(a?.[sortState.key] || 0);
+      const bb = Number(b?.[sortState.key] || 0);
+      cmp = aa - bb;
+    }
+
+    if (cmp === 0) {
+      const aa = String(a?.username || "");
+      const bb = String(b?.username || "");
+      cmp = aa.localeCompare(bb, undefined, { sensitivity: "base", numeric: true });
+    }
+
+    return cmp * factor;
+  });
+
+  return rows;
+}
+
+function updateSortHeaders() {
+  const headers = playersHeadEl?.querySelectorAll("th[data-sort-key]") || [];
+  for (const th of headers) {
+    const key = String(th.dataset.sortKey || "");
+    if (key === sortState.key) {
+      th.dataset.sortDir = sortState.dir;
+      th.title = `Sorted ${sortState.dir.toUpperCase()} (click to toggle)`;
+    } else {
+      th.dataset.sortDir = "";
+      th.title = "Click to sort";
+    }
+  }
+}
+
 function renderPlayers(players) {
-  const rows = Array.isArray(players) ? players : [];
+  const rows = applyPlayersSort(players);
   if (!rows.length) {
     playersBodyEl.innerHTML = `
       <tr>
         <td colspan="6" class="mutedCell">No players yet.</td>
       </tr>
     `;
+    updateSortHeaders();
     return;
   }
 
@@ -84,6 +134,8 @@ function renderPlayers(players) {
       </td>
     </tr>
   `).join("");
+
+  updateSortHeaders();
 }
 
 async function apiFetch(method, path, body) {
@@ -119,7 +171,8 @@ async function apiFetch(method, path, body) {
 async function refreshState() {
   const data = await apiFetch("GET", "/state");
   renderState(data.state);
-  renderPlayers(data.players);
+  playersCache = Array.isArray(data.players) ? data.players : [];
+  renderPlayers(playersCache);
   setLog(`state loaded (phase=${data.state?.phase}, hp=${data.state?.bossHp})`);
 }
 
@@ -223,6 +276,23 @@ playersBodyEl.addEventListener("click", async (ev) => {
   } finally {
     button.disabled = false;
   }
+});
+
+playersHeadEl?.addEventListener("click", (ev) => {
+  const th = ev.target.closest("th[data-sort-key]");
+  if (!th) return;
+
+  const key = String(th.dataset.sortKey || "");
+  if (!key) return;
+
+  if (sortState.key === key) {
+    sortState.dir = sortState.dir === "asc" ? "desc" : "asc";
+  } else {
+    sortState.key = key;
+    sortState.dir = getSortDirectionForNewKey(key);
+  }
+
+  renderPlayers(playersCache);
 });
 
 addXpForm.addEventListener("submit", async (ev) => {

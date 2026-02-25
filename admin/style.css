@@ -201,6 +201,28 @@ button:disabled {
   white-space: nowrap;
 }
 
+.playersTable th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.playersTable th.sortable::after {
+  content: "↕";
+  margin-left: 6px;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.playersTable th.sortable[data-sort-dir="asc"]::after {
+  content: "↑";
+  color: #e2e8f0;
+}
+
+.playersTable th.sortable[data-sort-dir="desc"]::after {
+  content: "↓";
+  color: #e2e8f0;
+}
+
 .playersTable th:nth-child(1),
 .playersTable td:nth-child(1) {
   width: 52px;

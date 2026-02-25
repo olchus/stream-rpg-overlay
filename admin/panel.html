@@ -64,16 +64,16 @@
       </section>
 
       <section class="card">
-        <h2>Players (XP ASC)</h2>
+        <h2>Players</h2>
         <div class="playersWrap">
           <table class="playersTable">
             <thead>
               <tr>
                 <th>#</th>
-                <th>Player</th>
-                <th>XP</th>
-                <th>Skill</th>
-                <th>DMG</th>
+                <th class="sortable" data-sort-key="username">Player</th>
+                <th class="sortable" data-sort-key="xp">XP</th>
+                <th class="sortable" data-sort-key="skill">Skill</th>
+                <th class="sortable" data-sort-key="dmg">DMG</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -89,6 +89,6 @@
 
     <div id="toast" class="toast" hidden></div>
 
-    <script src="./admin.js?v=20260225-1"></script>
+    <script src="./admin.js?v=20260225-2"></script>
   </body>
 </html>
