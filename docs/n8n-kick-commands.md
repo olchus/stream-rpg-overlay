@@ -5,6 +5,7 @@ Docelowy przeplyw:
 Kick chat -> n8n workflow -> `POST /api/cmd` -> overlay toast/state update.
 
 Backend nie odpisuje na czat Kick (overlay-only).
+Jeden wspolny sekret dla calosci: `CMD_WEBHOOK_SECRET`.
 
 ## 1) Trigger w n8n
 
@@ -67,6 +68,16 @@ Przy poprawnym wywolaniu:
   }
 }
 ```
+
+## 6) `!makechaos` / `!maybechaos` w tej samej integracji
+
+Jesli ustawisz `CHAOS_TASK_WEBHOOK_URL`, aplikacja przy `!makechaos` wykona webhook do n8n:
+- URL: wartosc `CHAOS_TASK_WEBHOOK_URL`
+- Method: `POST`
+- Header auth: `x-cmd-secret: <CMD_WEBHOOK_SECRET>` (ten sam sekret co dla `/api/cmd`)
+- Body JSON: `message`, `text`, `content`, `message_ascii`, `task`, `by`
+
+Dzieki temu `!xp` (n8n -> app) i `!makechaos` (app -> n8n) korzystaja z jednego sekretu.
 
 Przy zduplikowanym `messageId`:
 

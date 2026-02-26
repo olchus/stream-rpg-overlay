@@ -127,6 +127,7 @@ Jak aplikacja rozpoznaje role:
 ## API komend `/api/cmd` (n8n)
 
 - Szczegolowy setup workflow: `docs/n8n-kick-commands.md`
+- Jeden wspolny sekret dla integracji n8n: `CMD_WEBHOOK_SECRET`
 - n8n powinno wywolywac webhook:
   - `POST https://rpg-overlay.olcha.cloud/api/cmd?secret=...`
   - header alternatywny: `x-cmd-secret: ...`
@@ -145,6 +146,7 @@ Jak aplikacja rozpoznaje role:
   - ustawia `state.chaosLast = { kind: "TASK", text, ts }`
   - wysyla event do overlay (`chaos` + toast)
   - opcjonalnie strzela webhookiem, jesli ustawione `CHAOS_TASK_WEBHOOK_URL`
+  - webhook wysyla auth header `x-cmd-secret` z wartoscia `CMD_WEBHOOK_SECRET`
 
 ### `!makechaos` (alias)
 
