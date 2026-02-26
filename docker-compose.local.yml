@@ -11,7 +11,6 @@ services:
       - .env
     environment:
       - PORT=3001
-      - KICK_ENABLED=false
       - TIPPLY_WEBHOOK_ENABLED=false
     volumes:
       - ./data:/app/data

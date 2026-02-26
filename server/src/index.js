@@ -1,8 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import crypto from "crypto";
-import { handleCommand } from "./commands.js";
-import { buildAuth, roleFromCloudbotLevel } from "./auth.js";
+import { buildAuth } from "./auth.js";
 import { createServer } from "http";
 import { Server } from "socket.io";
 
@@ -19,46 +18,25 @@ import {
   loadStreamlabsToken,
   saveStreamlabsToken
 } from "./streamlabsAuth.js";
-import { connectKick } from "./kick.js";
-import { clamp, nowMs, safeInt, safeNumber, normalizeUsername } from "./util.js";
+import { nowMs, safeInt, safeNumber, normalizeUsername } from "./util.js";
 import { registerWebhooks } from "./webhooks.js";
 import { registerAdminApi } from "./admin.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-
 const env = process.env;
 const auth = buildAuth(env);
-const CLOUDBOT_WEBHOOK_SECRET = env.CLOUDBOT_WEBHOOK_SECRET || "";
 const streamlabsAuth = buildStreamlabsAuth(env);
 
 const PORT = safeInt(env.PORT, 3001);
-
 const STREAMLABS_SOCKET_TOKEN = env.STREAMLABS_SOCKET_TOKEN || "";
-const KICK_CHANNEL = env.KICK_CHANNEL || "";
-const KICK_ENABLED = (env.KICK_ENABLED || "true").toLowerCase() === "true";
-const KICK_ADMIN_USERS = new Set(
-  String(env.KICK_ADMIN_USERS || "")
-    .split(",")
-    .map((s) => normalizeUsername(s).toLowerCase())
-    .filter(Boolean)
-);
-const KICK_MOD_USERS = new Set(
-  String(env.KICK_MOD_USERS || "")
-    .split(",")
-    .map((s) => normalizeUsername(s).toLowerCase())
-    .filter(Boolean)
-);
 
 const BOSS_MAX_HP = safeInt(env.BOSS_MAX_HP, 5000);
-const CHAT_ATTACK_DAMAGE = safeInt(env.CHAT_ATTACK_DAMAGE, 5);
 const FOLLOW_DAMAGE = safeInt(env.FOLLOW_DAMAGE, 20);
 const SUB_DAMAGE = safeInt(env.SUB_DAMAGE, 150);
 const DONATE_DMG_MULT = safeNumber(env.DONATE_DMG_MULT, 2.5);
 
-const CHAT_ATTACK_COOLDOWN_MS = safeInt(env.CHAT_ATTACK_COOLDOWN_MS, 60000);
-const CHAT_HEAL_COOLDOWN_MS = safeInt(env.CHAT_HEAL_COOLDOWN_MS, 120000);
 const SKILL_START = Math.max(1, safeInt(env.SKILL_START, 1));
 const SKILL_BASE_TRIES = Math.max(1, safeInt(env.SKILL_BASE_TRIES, 40));
 const SKILL_GROWTH = Math.max(1.01, safeNumber(env.SKILL_GROWTH, 1.16));
@@ -67,7 +45,7 @@ const SKILL_CFG = { SKILL_START, SKILL_BASE_TRIES, SKILL_GROWTH };
 const CHAOS_ENABLED = (env.CHAOS_ENABLED || "true").toLowerCase() === "true";
 const CHAOS_DONATE_THRESHOLD = safeInt(env.CHAOS_DONATE_THRESHOLD, 10);
 
-const DAILY_CLEANUP_HOURS = 48; // ile trzymać eventy w bazie
+const DAILY_CLEANUP_HOURS = 48; // ile trzymac eventy w bazie
 
 const app = express();
 app.use(express.json());
@@ -81,6 +59,7 @@ function newOauthState() {
   if (t.unref) t.unref();
   return s;
 }
+
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: "*" } });
 
@@ -95,115 +74,6 @@ function broadcastState(extra = {}) {
     ...state,
     ...extra
   });
-}
-
-function roleFromKickUser(userRaw) {
-  const u = normalizeUsername(userRaw).toLowerCase();
-  if (!u) return "viewer";
-  if (u === auth.admin || KICK_ADMIN_USERS.has(u)) return "admin";
-  if (KICK_MOD_USERS.has(u)) return "mod";
-  return "viewer";
-}
-
-function parseKickGiftMessage(text, raw) {
-  if (!text) return null;
-  const amountMatch = String(text).match(/(\d+)\s*kicks?\b/i);
-  if (!amountMatch) return null;
-  const kicks = safeInt(amountMatch[1], 0);
-  if (kicks <= 0) return null;
-
-  const senderRaw =
-    raw?.sender?.username ||
-    raw?.sender?.slug ||
-    raw?.sender?.name ||
-    raw?.username ||
-    raw?.user?.username ||
-    raw?.user?.name ||
-    "";
-
-  let giver = normalizeUsername(String(senderRaw).replace(/^@/, ""));
-  const senderHint = String(senderRaw || "").toLowerCase();
-  if (!giver || giver === "unknown" || senderHint === "kick" || senderHint === "system") {
-    const nameMatch = String(text).match(/^@?([A-Za-z0-9_-]{2,})\b/);
-    if (nameMatch) giver = normalizeUsername(nameMatch[1]);
-  }
-  if (!giver || giver === "unknown") return null;
-
-  const typeHint = String(raw?.type || raw?.message_type || raw?.event || raw?.kind || "").toLowerCase();
-  const looksLikeSystem =
-    raw?.system === true ||
-    raw?.is_system === true ||
-    ["system", "event", "gift", "kicks"].some((k) => typeHint.includes(k));
-  const looksLikeGift = /gift|podarow|sent/i.test(String(text));
-  if (!looksLikeSystem && !looksLikeGift) return null;
-
-  return { giver, kicks };
-}
-
-function parseBooleanFlag(value) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value !== "string") return null;
-
-  const text = value.trim().toLowerCase();
-  if (!text) return null;
-  if (["1", "true", "yes", "y", "on"].includes(text)) return true;
-  if (["0", "false", "no", "n", "off"].includes(text)) return false;
-  return null;
-}
-
-function hasSubMarker(value) {
-  if (value === null || value === undefined) return false;
-  if (Array.isArray(value)) return value.some(hasSubMarker);
-  if (typeof value === "object") {
-    return Object.entries(value).some(([k, v]) => hasSubMarker(k) || hasSubMarker(v));
-  }
-
-  const text = String(value).trim().toLowerCase();
-  if (!text) return false;
-  return ["sub", "subscriber", "subscription", "subscribed", "prime"].some((k) => text.includes(k));
-}
-
-function isKickSubscriber(raw) {
-  const directCandidates = [
-    raw?.isSub,
-    raw?.is_sub,
-    raw?.subscriber,
-    raw?.isSubscriber,
-    raw?.is_subscriber,
-    raw?.user?.isSub,
-    raw?.user?.is_sub,
-    raw?.user?.subscriber,
-    raw?.user?.isSubscriber,
-    raw?.user?.is_subscriber,
-    raw?.sender?.isSub,
-    raw?.sender?.is_sub,
-    raw?.sender?.subscriber,
-    raw?.sender?.isSubscriber,
-    raw?.sender?.is_subscriber
-  ];
-  for (const candidate of directCandidates) {
-    const parsed = parseBooleanFlag(candidate);
-    if (parsed !== null) return parsed;
-  }
-
-  const roleCandidates = [
-    raw?.role,
-    raw?.roles,
-    raw?.badges,
-    raw?.badge,
-    raw?.tags,
-    raw?.flags,
-    raw?.user?.role,
-    raw?.user?.roles,
-    raw?.user?.badges,
-    raw?.user?.badge,
-    raw?.sender?.role,
-    raw?.sender?.roles,
-    raw?.sender?.badges,
-    raw?.sender?.badge
-  ];
-  return roleCandidates.some(hasSubMarker);
 }
 
 function ensureUser(usernameRaw) {
@@ -261,7 +131,7 @@ function getLeaderboards() {
   return { topXp, topDmg };
 }
 
-function getPhaseWinners(phaseStartMs) {
+function getPhaseWinners(_phaseStartMs) {
   const winners = dbh.topUsersByXp.all(3);
   return winners || [];
 }
@@ -386,120 +256,9 @@ startTipplyGoalPoller({
   getPhaseWinners
 });
 
-
 io.on("connection", (socket) => {
   socket.emit("state", { ...state, leaderboards: getLeaderboards() });
 });
-
-// ----- Kick commands -----
-function handleKickMessage({ user, text, raw }) {
-  const t = String(text || "").trim();
-
-  const gift = parseKickGiftMessage(t, raw);
-  if (gift) {
-    if (state.paused) return;
-    const u = ensureUser(gift.giver);
-    const dmg = gift.kicks;
-    updateUser(u.username, 2);
-    recordEvent(u.username, "kick_gift", dmg, JSON.stringify({ kicks: gift.kicks, source: "kick" }));
-    const result = applyDamage(state, u.username, dmg, "kick_gift");
-    if (result.defeated) {
-      state.phaseWinners = getPhaseWinners(state.phaseStartMs);
-      state.phaseStartMs = nowMs();
-    }
-    broadcastState({ leaderboards: getLeaderboards(), toast: `${u.username} gifted ${gift.kicks} KICKS -> HIT -${dmg}` });
-    return;
-  }
-
-  if (!t.startsWith("!")) return;
-  const role = roleFromKickUser(user);
-
-  if (t === "!attack") {
-    if (state.paused) return;
-    const u = ensureUser(user);
-    const now = nowMs();
-    const isSub = isKickSubscriber(raw);
-
-    if (now - u.last_attack_ms < CHAT_ATTACK_COOLDOWN_MS) {
-      // silent cooldown (żeby nie spamować)
-      return;
-    }
-
-    const userSkill = Math.max(SKILL_START, safeInt(u.skill, SKILL_START));
-    const subBonus = isSub ? 5 : 0;
-    const scaled = clamp(CHAT_ATTACK_DAMAGE + userSkill + subBonus, 1, 9999);
-    const skillTryPerAttack = Math.max(0, safeInt(env.SKILL_TRY_PER_ATTACK, 1));
-
-    updateUser(u.username, 2, now, null, { skillTriesAdd: skillTryPerAttack }); // xp za aktywność
-    recordEvent(u.username, "chat_attack", scaled, JSON.stringify({
-      source: "kick",
-      base: CHAT_ATTACK_DAMAGE,
-      skill: userSkill,
-      subBonus,
-      isSub,
-      total: scaled
-    }));
-
-    const result = applyDamage(state, u.username, scaled, "kick_chat");
-    if (result.defeated) {
-      state.phaseWinners = getPhaseWinners(state.phaseStartMs);
-      state.phaseStartMs = nowMs();
-    }
-    broadcastState({ leaderboards: getLeaderboards() });
-    return;
-  }
-
-  if (t === "!heal") {
-    // Heal to boss (hardcore chaos): chat can troll - heals boss a bit, but gives XP.
-    if (state.paused) return;
-    const u = ensureUser(user);
-    const now = nowMs();
-    if (now - u.last_heal_ms < CHAT_HEAL_COOLDOWN_MS) {
-      // silent cooldown (żeby nie spamować)
-      return;
-    }
-    const heal = 15;
-    state.bossHp = Math.min(state.bossMaxHp, state.bossHp + heal);
-    updateUser(u.username, 5, null, now);
-    recordEvent(u.username, "chat_heal", heal, "kick");
-    broadcastState({ leaderboards: getLeaderboards(), toast: `${u.username} healed boss +${heal} 😈` });
-    return;
-  }
-
-  if (t === "!stats") {
-    const u = ensureUser(user);
-    // overlay doesn't show chat replies; you can later add "bot message" to Kick
-    recordEvent(u.username, "chat_stats", 0, "kick");
-    return;
-  }
-
-  // Other commands (admin/mod) via shared handler
-  const result = handleCommand({
-    user,
-    role,
-    isSub: isKickSubscriber(raw),
-    rawText: t,
-    userRaw: user,
-    roleRaw: role,
-    cmdRaw: t,
-    eventId: crypto.randomUUID(),
-    source: "kick",
-    state,
-    env,
-    db: dbh,
-    auth,
-    updateUser,
-    recordEvent,
-    getLeaderboards,
-    getPhaseWinners,
-    broadcastState
-  });
-
-  if (result?.ok) return;
-  if (result?.message && !result?.silent) {
-    console.log("[kick][cmd]", JSON.stringify({ user, role, cmd: t, ok: result.ok, message: result.message }));
-  }
-}
 
 // ----- Streamlabs events -----
 function handleStreamlabsEvent(data) {
@@ -528,7 +287,7 @@ function handleStreamlabsEvent(data) {
 
     broadcastState({
       leaderboards: getLeaderboards(),
-      toast: `${who} donated ${amount} → HIT -${dmg}`,
+      toast: `${who} donated ${amount} -> HIT -${dmg}`,
       chaos
     });
     return;
@@ -549,7 +308,7 @@ function handleStreamlabsEvent(data) {
 
     broadcastState({
       leaderboards: getLeaderboards(),
-      toast: `${who} SUB → CRIT -${dmg}`
+      toast: `${who} SUB -> CRIT -${dmg}`
     });
     return;
   }
@@ -569,9 +328,8 @@ function handleStreamlabsEvent(data) {
 
     broadcastState({
       leaderboards: getLeaderboards(),
-      toast: `${who} FOLLOW → -${dmg}`
+      toast: `${who} FOLLOW -> -${dmg}`
     });
-    return;
   }
 }
 
@@ -616,18 +374,6 @@ async function resolveStreamlabsSocketToken() {
   }
   connectStreamlabsWithToken(token, source);
 })();
-
-if (KICK_ENABLED && KICK_CHANNEL) {
-  (async () => {
-    try {
-      await connectKick(KICK_CHANNEL, (m) => handleKickMessage(m));
-    } catch (e) {
-      console.log("[kick] disabled:", e?.message || e);
-    }
-  })();
-} else {
-  console.log("[kick] disabled by env");
-}
 
 // Cleanup old events periodically (keeps DB small)
 setInterval(() => {

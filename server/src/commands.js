@@ -26,7 +26,7 @@ function sendChaosTaskWebhook(env, task, user) {
   const secret = String(
     env?.CHAOS_TASK_WEBHOOK_SECRET ||
     env?.CHAOS_WEBHOOK_SECRET ||
-    env?.CLOUDBOT_WEBHOOK_SECRET ||
+    env?.CMD_WEBHOOK_SECRET ||
     ""
   ).trim();
   const message = `😵‍💫💥CHAOS TASK: ${task} 😵‍💫💥`;
@@ -81,6 +81,7 @@ export function handleCommand(ctx) {
   const roleRaw = ctx?.roleRaw ?? ctx?.role ?? "";
   const envName = ctx?.env?.NODE_ENV || process.env.NODE_ENV || "unknown";
   const source = ctx?.source || "unknown";
+  const commandSource = source === "unknown" ? "cmd_api" : source;
   const eventId = ctx?.eventId || "na";
 
   const user = normalizeUsername(ctx.user);
@@ -132,10 +133,11 @@ export function handleCommand(ctx) {
   if (cmdNorm === "xp") {
     const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
     const xp = safeInt(row?.xp, 0);
-    const level = Math.max(1, safeInt(row?.level, 1));
+    const skillStart = Math.max(1, safeInt(ctx.env?.SKILL_START, 1));
+    const skill = Math.max(skillStart, safeInt(row?.skill, skillStart));
     return {
       ok: true,
-      message: `${user}: ${xp} XP (lvl ${level})`
+      message: `${user} XP: ${xp} | SK: ${skill}`
     };
   }
 
@@ -161,14 +163,14 @@ export function handleCommand(ctx) {
     const updated = ctx.updateUser(user, 2, now, null, { skillTriesAdd: skillTryPerAttack });
     const breakdown = `base ${dmgBase} + skill ${userSkill} + sub ${subBonus}`;
     ctx.recordEvent(user, "chat_attack", dmg, JSON.stringify({
-      source: "cloudbot",
+      source: commandSource,
       base: dmgBase,
       skill: userSkill,
       subBonus,
       isSub,
       total: dmg
     }));
-    const result = applyDamage(ctx.state, user, dmg, "cloudbot_attack");
+    const result = applyDamage(ctx.state, user, dmg, `${commandSource}_attack`);
     if (result.defeated) {
       ctx.state.phaseWinners = ctx.getPhaseWinners?.(ctx.state.phaseStartMs) || [];
       ctx.state.phaseStartMs = nowMs();
@@ -197,7 +199,7 @@ export function handleCommand(ctx) {
     ctx.state.bossHp = Math.min(ctx.state.bossMaxHp, ctx.state.bossHp + heal);
 
     ctx.updateUser(user, 5, null, now);
-    ctx.recordEvent(user, "chat_heal", heal, "cloudbot");
+    ctx.recordEvent(user, "chat_heal", heal, commandSource);
 
     ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `${user} !heal → +${heal} 😈` });
     return { ok: true };

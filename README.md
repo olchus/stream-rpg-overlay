@@ -11,7 +11,7 @@ W serwowaniu `/admin` unikamy redirectow `/admin -> /admin/`, bo przy niektorych
 1. Ustaw w `.env`:
    - `PORT=3001`
    - `ADMIN_API_TOKEN=<dlugi_losowy_token>`
-   - (opcjonalnie na lokalu) `KICK_ENABLED=false`, `TIPPLY_WEBHOOK_ENABLED=false`
+   - (opcjonalnie na lokalu) `TIPPLY_WEBHOOK_ENABLED=false`
 2. Uruchom aplikacje:
    - lokalnie: `npm install && npm run dev`
    - Docker: `docker compose -f docker-compose.local.yml up --build`
@@ -39,14 +39,10 @@ Symulacja tempa skilla:
 
 Jak aplikacja rozpoznaje role:
 
-- Cloudbot:
-  - `admin`: poziom `broadcaster`, `streamer`, `owner` lub `admin`
-  - `mod`: poziom `mod` lub `moderator`
-  - pozostale poziomy -> `viewer`
-- Kick:
-  - `admin`: `ADMIN_USERNAME` lub uzytkownik z `KICK_ADMIN_USERS`
-  - `mod`: uzytkownik z `KICK_MOD_USERS`
-  - pozostali -> `viewer`
+- n8n `/api/cmd`:
+  - `admin`: `level=admin` (takze `broadcaster/streamer/owner`) lub `ADMIN_USERNAME`
+  - `mod`: `level=mod` lub `level=moderator`
+  - brak/inna wartosc `level` -> `viewer`
 
 `ADMIN_USERNAME` ma uprawnienia admina niezaleznie od zrodla.
 
@@ -72,11 +68,10 @@ Jak aplikacja rozpoznaje role:
 - Uwagi:
   - bonus sub (`+5`) dziala, gdy backend rozpozna suba:
     - jawnie z `isSub` (`true/false`, `1/0`) w body/query webhooka
-    - albo po markerach `sub/subscriber` w `badges` / `roles`
   - gdy brak informacji o subie, traktowane jest to jako `false` (brak bonusu)
-  - Cloudbot: dodaj `isSub` do webhooka komendy, np.:
+  - n8n: dodaj `isSub` do payloadu komendy, np.:
     - `.../api/cmd?secret=<SECRET>&user=<USER>&text=<TEXT>&level=<LEVEL>&isSub=<SUB_STATUS>`
-  - jesli Twoj Cloudbot nie ma zmiennej sub statusu, wysylaj `isSub=false`
+  - jesli workflow nie ma statusu sub, wysylaj `isSub=false`
 
 ### Skill (melee-style)
 
@@ -84,7 +79,7 @@ Jak aplikacja rozpoznaje role:
   - `skill` (start z `SKILL_START`, domyslnie `1`)
   - `skill_tries` (progres do nastepnego skilla)
 - Naliczanie:
-  - dla `!attack` przez sciezke Cloudbot/webhook (`/api/cmd`) oraz Kick chat
+  - dla `!attack` przez sciezke `/api/cmd` (n8n -> app)
   - na kazdy atak dodawane jest `SKILL_TRY_PER_ATTACK` tries (domyslnie `1`)
 - Wymagane tries do kolejnego skilla:
   - `required = round(SKILL_BASE_TRIES * SKILL_GROWTH^(skill - SKILL_START))`
@@ -124,19 +119,21 @@ Jak aplikacja rozpoznaje role:
 
 - Dostepna dla: `viewer`, `mod`, `admin`
 - Dzialanie:
-  - zwraca XP i level autora komendy na czat:
-    - `<user>: <xp> XP (lvl <level>)`
+  - zwraca XP i skill autora komendy:
+    - `<user> XP: <xp> | SK: <skill>`
 - Uwaga:
   - komenda informacyjna, dziala rowniez gdy gra jest w `paused`
 
-### `!stats` (Kick)
+## API komend `/api/cmd` (n8n)
 
-- Dostepna dla: `viewer`, `mod`, `admin`
-- Dzialanie:
-  - zapisuje event `chat_stats`
-  - nie wysyla odpowiedzi na overlay i nie wysyla wiadomosci zwrotnej na czat
-- Uwaga:
-  - ta komenda jest obsluzona tylko na sciezce Kick
+- Szczegolowy setup workflow: `docs/n8n-kick-commands.md`
+- n8n powinno wywolywac webhook:
+  - `POST https://rpg-overlay.olcha.cloud/api/cmd?secret=...`
+  - header alternatywny: `x-cmd-secret: ...`
+  - body JSON: `user`, `text`, `level`, `isSub`, `source`, `messageId`, `ts`
+- Backend zwraca:
+  - `{ ok: true, result: {...} }`
+- Aplikacja nie wysyla odpowiedzi na czat Kick (overlay-only).
 
 ## Komendy `mod`
 

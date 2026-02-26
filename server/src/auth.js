@@ -9,9 +9,8 @@ export function buildAuth(env) {
   return { admin };
 }
 
-export function roleFromCloudbotLevel(levelRaw) {
-  // Cloudbot ma poziomy typu: everyone/mod/sub/admin (zależnie od UI).
-  // Normalizujemy do: viewer | mod | admin
+export function roleFromLevel(levelRaw) {
+  // Normalize upstream role labels to: viewer | mod | admin.
   const level = String(levelRaw || "").toLowerCase();
 
   if (["broadcaster", "streamer", "owner", "admin"].includes(level)) return "admin";
@@ -19,12 +18,15 @@ export function roleFromCloudbotLevel(levelRaw) {
   return "viewer";
 }
 
+// Backward-compatible alias for existing imports.
+export const roleFromCloudbotLevel = roleFromLevel;
+
 export function isAdmin(user, auth) {
   return authUserKey(user) === auth.admin;
 }
 
 export function canRun(command, user, role, auth) {
-  // command = np. "reset", "phase", "pause"
+  // command = e.g. "reset", "phase", "pause"
   // role: viewer|mod|admin
 
   // Admin-only
@@ -42,7 +44,7 @@ export function canRun(command, user, role, auth) {
     "resetall",
     "shutdown"
   ]);
-  // Mod lub admin
+  // Mod or admin
   const modOrAdmin = new Set(["pause", "resume", "maybechaos"]);
 
   if (adminOnly.has(command)) return role === "admin" || isAdmin(user, auth);

@@ -1,6 +1,9 @@
 import crypto from "crypto";
-import { roleFromCloudbotLevel } from "./auth.js";
+import { roleFromLevel } from "./auth.js";
 import { handleCommand } from "./commands.js";
+
+const DEDUP_TTL_MS = 5 * 60 * 1000;
+const DEDUP_MAX_IDS = 500;
 
 function timingSafeEq(a, b) {
   const aa = Buffer.from(String(a || ""));
@@ -9,52 +12,58 @@ function timingSafeEq(a, b) {
   return crypto.timingSafeEqual(aa, bb);
 }
 
-function parseBooleanFlag(value) {
+function parseBooleanFlag(value, fallback = false) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") return fallback;
 
   const text = value.trim().toLowerCase();
-  if (!text) return null;
+  if (!text) return fallback;
   if (["1", "true", "yes", "y", "on"].includes(text)) return true;
   if (["0", "false", "no", "n", "off"].includes(text)) return false;
-  return null;
+  return fallback;
 }
 
-function hasSubMarker(value) {
-  if (value === null || value === undefined) return false;
-  if (Array.isArray(value)) return value.some(hasSubMarker);
-  if (typeof value === "object") {
-    return Object.entries(value).some(([k, v]) => hasSubMarker(k) || hasSubMarker(v));
+function normalizeOptionalString(value) {
+  if (value === null || value === undefined) return "";
+  const text = String(value).trim();
+  return text;
+}
+
+function createMessageDeduper(ttlMs, maxSize) {
+  const seenIds = new Map();
+
+  function prune(now) {
+    for (const [id, expiresAt] of seenIds) {
+      if (expiresAt <= now) seenIds.delete(id);
+    }
+
+    while (seenIds.size > maxSize) {
+      const oldest = seenIds.keys().next().value;
+      if (oldest === undefined) break;
+      seenIds.delete(oldest);
+    }
   }
 
-  const text = String(value).trim().toLowerCase();
-  if (!text) return false;
-  return ["sub", "subscriber", "subscription", "subscribed", "prime"].some((k) => text.includes(k));
+  function isDuplicate(rawMessageId) {
+    const messageId = normalizeOptionalString(rawMessageId);
+    if (!messageId) return false;
+
+    const now = Date.now();
+    prune(now);
+
+    const existingExpiresAt = seenIds.get(messageId);
+    if (existingExpiresAt && existingExpiresAt > now) return true;
+
+    seenIds.delete(messageId);
+    seenIds.set(messageId, now + ttlMs);
+    prune(now);
+    return false;
+  }
+
+  return { isDuplicate };
 }
 
-function parseIsSub(req) {
-  const explicit = parseBooleanFlag(req.body?.isSub ?? req.query?.isSub);
-  if (explicit !== null) return explicit;
-
-  const level = String(req.body?.level || req.query?.level || "").trim().toLowerCase();
-  if (["sub", "subscriber"].includes(level)) return true;
-
-  const roleCandidates = [
-    req.body?.role,
-    req.query?.role,
-    req.body?.roles,
-    req.query?.roles,
-    req.body?.badges,
-    req.query?.badges
-  ];
-  return roleCandidates.some(hasSubMarker);
-}
-
-/**
- * Rejestruje webhook Cloudbot: POST /api/cmd
- * Wymaga header: x-cloudbot-secret
- */
 export function registerWebhooks(app, deps) {
   const {
     env,
@@ -68,24 +77,36 @@ export function registerWebhooks(app, deps) {
     getPhaseWinners
   } = deps;
 
-  const secret = env.CLOUDBOT_WEBHOOK_SECRET || "";
+  const secret = String(env.CMD_WEBHOOK_SECRET || "").trim();
+  const deduper = createMessageDeduper(DEDUP_TTL_MS, DEDUP_MAX_IDS);
 
   app.post("/api/cmd", (req, res) => {
     if (!secret) return res.status(500).json({ ok: false, error: "missing secret" });
 
-    const sig = req.header("x-cloudbot-secret") || req.query?.secret || "";
+    const sig = req.header("x-cmd-secret") || req.query?.secret || "";
     if (!timingSafeEq(sig, secret)) {
       return res.status(401).json({ ok: false, error: "unauthorized" });
     }
 
-    const user = String(req.body?.user || req.query?.user || "");
-    const text = String(req.body?.text || req.query?.text || "");
-    const level = String(req.body?.level || req.query?.level || "viewer");
-    const role = roleFromCloudbotLevel(level);
-    const isSub = parseIsSub(req);
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const user = normalizeOptionalString(body.user ?? req.query?.user);
+    const text = normalizeOptionalString(body.text ?? req.query?.text);
+    const level = normalizeOptionalString(body.level ?? req.query?.level) || "viewer";
+    const role = roleFromLevel(level);
+    const isSub = parseBooleanFlag(body.isSub ?? req.query?.isSub, false);
+    const source = normalizeOptionalString(body.source ?? req.query?.source) || "n8n";
+    const messageId = normalizeOptionalString(body.messageId ?? req.query?.messageId);
+    const tsInput = body.ts ?? req.query?.ts ?? Date.now();
+
+    if (messageId && deduper.isDuplicate(messageId)) {
+      return res.json({
+        ok: true,
+        result: { ok: true, dedup: true, messageId }
+      });
+    }
+
     const eventId = crypto.randomUUID();
     const envName = env.NODE_ENV || process.env.NODE_ENV || "unknown";
-    const source = "cloudbot";
     const ts = new Date().toISOString();
     const contentType = req.header("content-type") || "";
 
@@ -101,7 +122,10 @@ export function registerWebhooks(app, deps) {
         cmdRaw: text,
         roleRaw: level,
         role,
-        isSub
+        isSub,
+        sourceInput: source,
+        messageId,
+        tsInput
       })
     );
 
@@ -115,6 +139,7 @@ export function registerWebhooks(app, deps) {
       isSub,
       eventId,
       source,
+      ts: tsInput,
       state,
       env,
       db,
@@ -138,6 +163,10 @@ export function registerWebhooks(app, deps) {
         silent: result?.silent
       })
     );
+
+    if (!result?.silent && result?.message !== undefined && result?.message !== null) {
+      broadcastState({ toast: String(result.message) });
+    }
 
     return res.json({ ok: true, result });
   });
