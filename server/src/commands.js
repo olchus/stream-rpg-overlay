@@ -128,11 +128,10 @@ export function handleCommand(ctx) {
   if (cmdNorm === "xp") {
     const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
     const xp = safeInt(row?.xp, 0);
-    const skillStart = Math.max(1, safeInt(ctx.env?.SKILL_START, 1));
-    const skill = Math.max(skillStart, safeInt(row?.skill, skillStart));
     return {
       ok: true,
-      message: `${user} XP: ${xp} | SK: ${skill}`
+      msg: `@${user} XP: ${xp}`,
+      xp
     };
   }
 

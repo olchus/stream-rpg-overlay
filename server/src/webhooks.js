@@ -159,13 +159,30 @@ export function registerWebhooks(app, deps) {
         source,
         eventId,
         ok: result?.ok,
+        msg: result?.msg,
         message: result?.message,
+        xp: result?.xp,
         silent: result?.silent
       })
     );
 
-    if (!result?.silent && result?.message !== undefined && result?.message !== null) {
-      broadcastState({ toast: String(result.message) });
+    if (text.toLowerCase() === "!xp") {
+      console.log(
+        "[chat][xp]",
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          eventId,
+          user,
+          ok: result?.ok,
+          msg: result?.msg,
+          xp: result?.xp
+        })
+      );
+    }
+
+    const toastMessage = result?.message ?? result?.msg;
+    if (!result?.silent && toastMessage !== undefined && toastMessage !== null) {
+      broadcastState({ toast: String(toastMessage) });
     }
 
     return res.json({ ok: true, result });
