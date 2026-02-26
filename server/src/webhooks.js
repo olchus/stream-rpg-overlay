@@ -30,8 +30,23 @@ function normalizeOptionalString(value) {
   return text;
 }
 
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const normalized = normalizeOptionalString(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
 function createMessageDeduper(ttlMs, maxSize) {
   const seenIds = new Map();
+
+  function buildKey(rawMessageId, rawTs) {
+    const messageId = normalizeOptionalString(rawMessageId);
+    if (!messageId) return "";
+    const ts = normalizeOptionalString(rawTs);
+    return ts ? `${messageId}::${ts}` : messageId;
+  }
 
   function prune(now) {
     for (const [id, expiresAt] of seenIds) {
@@ -45,18 +60,18 @@ function createMessageDeduper(ttlMs, maxSize) {
     }
   }
 
-  function isDuplicate(rawMessageId) {
-    const messageId = normalizeOptionalString(rawMessageId);
-    if (!messageId) return false;
+  function isDuplicate(rawMessageId, rawTs) {
+    const key = buildKey(rawMessageId, rawTs);
+    if (!key) return false;
 
     const now = Date.now();
     prune(now);
 
-    const existingExpiresAt = seenIds.get(messageId);
+    const existingExpiresAt = seenIds.get(key);
     if (existingExpiresAt && existingExpiresAt > now) return true;
 
-    seenIds.delete(messageId);
-    seenIds.set(messageId, now + ttlMs);
+    seenIds.delete(key);
+    seenIds.set(key, now + ttlMs);
     prune(now);
     return false;
   }
@@ -89,16 +104,51 @@ export function registerWebhooks(app, deps) {
     }
 
     const body = req.body && typeof req.body === "object" ? req.body : {};
-    const user = normalizeOptionalString(body.user ?? req.query?.user);
-    const text = normalizeOptionalString(body.text ?? req.query?.text);
-    const level = normalizeOptionalString(body.level ?? req.query?.level) || "viewer";
+    const user = firstNonEmpty(
+      body.user,
+      body.username,
+      body?.sender?.username,
+      body?.author?.username,
+      body?.author,
+      req.query?.user,
+      req.query?.username
+    );
+    const text = firstNonEmpty(
+      body.text,
+      body.message,
+      body.content,
+      body.cmd,
+      req.query?.text,
+      req.query?.message,
+      req.query?.content,
+      req.query?.cmd
+    );
+    const level = firstNonEmpty(body.level, body.role, req.query?.level, req.query?.role) || "viewer";
     const role = roleFromLevel(level);
     const isSub = parseBooleanFlag(body.isSub ?? req.query?.isSub, false);
     const source = normalizeOptionalString(body.source ?? req.query?.source) || "n8n";
-    const messageId = normalizeOptionalString(body.messageId ?? req.query?.messageId);
-    const tsInput = body.ts ?? req.query?.ts ?? Date.now();
+    const messageId = firstNonEmpty(
+      body.messageId,
+      body.message_id,
+      body.id,
+      req.query?.messageId,
+      req.query?.message_id,
+      req.query?.id
+    );
+    const tsInput = body.ts ?? body.timestamp ?? req.query?.ts ?? req.query?.timestamp ?? Date.now();
 
-    if (messageId && deduper.isDuplicate(messageId)) {
+    if (messageId && deduper.isDuplicate(messageId, tsInput)) {
+      console.log(
+        "[chat][dedup]",
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          source,
+          user,
+          cmdRaw: text,
+          messageId,
+          tsInput
+        })
+      );
       return res.json({
         ok: true,
         result: { ok: true, dedup: true, messageId }
@@ -162,6 +212,7 @@ export function registerWebhooks(app, deps) {
         msg: result?.msg,
         message: result?.message,
         xp: result?.xp,
+        reason: result?.reason,
         silent: result?.silent
       })
     );

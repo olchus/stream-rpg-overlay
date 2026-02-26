@@ -151,7 +151,7 @@ export function handleCommand(ctx) {
     const dmg = clamp(dmgBase + userSkill + subBonus, 1, 9999);
 
     if (now - lastAttackMs < cooldownMs) {
-      return { ok: false, silent: true };
+      return { ok: false, silent: true, reason: "cooldown_attack" };
     }
 
     const updated = ctx.updateUser(user, 2, now, null, { skillTriesAdd: skillTryPerAttack });
