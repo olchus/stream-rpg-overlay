@@ -107,7 +107,7 @@ export function handleCommand(ctx) {
     })
   );
 
-  if (!cmd) return { ok: false, silent: true };
+  if (!cmd) return { ok: false, silent: true, reason: "missing_cmd" };
 
   const viewerInfoCommands = new Set(["bosshp", "xp"]);
   if (ctx.state.paused && (ctx.role === "viewer") && !viewerInfoCommands.has(cmdNorm)) {
@@ -330,5 +330,5 @@ export function handleCommand(ctx) {
     }
   }
 
-  return { ok: false, silent: true };
+  return { ok: false, silent: true, reason: "unknown_cmd" };
 }

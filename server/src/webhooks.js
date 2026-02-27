@@ -107,7 +107,14 @@ export function registerWebhooks(app, deps) {
     const user = firstNonEmpty(
       body.user,
       body.username,
+      body?.data?.user,
+      body?.data?.username,
+      body?.data?.sender?.username,
+      body?.data?.sender?.slug,
       body?.sender?.username,
+      body?.sender?.slug,
+      body?.raw?.sender?.username,
+      body?.raw?.sender?.slug,
       body?.author?.username,
       body?.author,
       req.query?.user,
@@ -118,24 +125,65 @@ export function registerWebhooks(app, deps) {
       body.message,
       body.content,
       body.cmd,
+      body?.data?.text,
+      body?.data?.message,
+      body?.data?.content,
+      body?.raw?.text,
+      body?.raw?.message,
+      body?.raw?.content,
       req.query?.text,
       req.query?.message,
       req.query?.content,
       req.query?.cmd
     );
-    const level = firstNonEmpty(body.level, body.role, req.query?.level, req.query?.role) || "viewer";
+    const level = firstNonEmpty(
+      body.level,
+      body.role,
+      body?.data?.level,
+      body?.data?.role,
+      req.query?.level,
+      req.query?.role
+    ) || "viewer";
     const role = roleFromLevel(level);
-    const isSub = parseBooleanFlag(body.isSub ?? req.query?.isSub, false);
+    const isSub = parseBooleanFlag(
+      body.isSub ??
+      body.is_sub ??
+      body?.data?.isSub ??
+      body?.data?.is_sub ??
+      body?.data?.sender?.isSub ??
+      body?.data?.sender?.is_sub ??
+      body?.raw?.sender?.isSub ??
+      body?.raw?.sender?.is_sub ??
+      req.query?.isSub,
+      false
+    );
     const source = normalizeOptionalString(body.source ?? req.query?.source) || "n8n";
     const messageId = firstNonEmpty(
       body.messageId,
       body.message_id,
       body.id,
+      body?.data?.messageId,
+      body?.data?.message_id,
+      body?.data?.id,
+      body?.raw?.messageId,
+      body?.raw?.message_id,
+      body?.raw?.id,
       req.query?.messageId,
       req.query?.message_id,
       req.query?.id
     );
-    const tsInput = body.ts ?? body.timestamp ?? req.query?.ts ?? req.query?.timestamp ?? Date.now();
+    const tsInput =
+      body.ts ??
+      body.timestamp ??
+      body?.data?.ts ??
+      body?.data?.timestamp ??
+      body?.data?.created_at ??
+      body?.raw?.ts ??
+      body?.raw?.timestamp ??
+      body?.raw?.created_at ??
+      req.query?.ts ??
+      req.query?.timestamp ??
+      Date.now();
 
     if (messageId && deduper.isDuplicate(messageId, tsInput)) {
       console.log(
@@ -234,6 +282,18 @@ export function registerWebhooks(app, deps) {
     const toastMessage = result?.message ?? result?.msg;
     if (!result?.silent && toastMessage !== undefined && toastMessage !== null) {
       broadcastState({ toast: String(toastMessage) });
+    }
+    if (!result?.ok && result?.reason) {
+      console.log(
+        "[chat][ignored]",
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          eventId,
+          user,
+          text,
+          reason: result.reason
+        })
+      );
     }
 
     return res.json({ ok: true, result });

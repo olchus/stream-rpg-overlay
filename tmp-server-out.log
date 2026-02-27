@@ -1,0 +1,8 @@
+[admin] serving static from: E:\code\stream-rpg-overlay\admin
+[tipply][goal] polling https://tipply.pl/api/widget/goal/7184437a-ad51-41ed-ac0f-3947c9725e9c/afbe9e7b-85d7-4343-974d-54553979bb53 every 15000ms
+[app] listening on :3001
+[tipply][goal] baseline 54.00
+[streamlabs] connected
+[chat][recv] {"ts":"2026-02-26T17:49:44.148Z","env":"unknown","source":"n8n","eventId":"feeca06a-c2c8-4da3-a15a-a41f00b66f83","contentType":"application/json","userRaw":"olcha_str","cmdRaw":"!attack","roleRaw":"viewer","role":"viewer","isSub":false,"sourceInput":"n8n","messageId":"k123","tsInput":"2026-02-26T12:00:00Z"}
+[chat][parse] {"ts":"2026-02-26T17:49:44.165Z","env":"unknown","source":"n8n","eventId":"feeca06a-c2c8-4da3-a15a-a41f00b66f83","userRaw":"olcha_str","cmdRaw":"!attack","roleRaw":"viewer","cmd":"attack","args":[]}
+[chat][result] {"ts":"2026-02-26T17:49:44.166Z","env":"unknown","source":"n8n","eventId":"feeca06a-c2c8-4da3-a15a-a41f00b66f83","ok":true}
