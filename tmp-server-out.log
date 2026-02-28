@@ -1,8 +1,11 @@
 [admin] serving static from: E:\code\stream-rpg-overlay\admin
 [tipply][goal] polling https://tipply.pl/api/widget/goal/7184437a-ad51-41ed-ac0f-3947c9725e9c/afbe9e7b-85d7-4343-974d-54553979bb53 every 15000ms
 [app] listening on :3001
+[chat][recv] {"ts":"2026-02-27T22:53:37.510Z","env":"unknown","source":"n8n","eventId":"c325b406-1c11-44fe-a4db-6903d44a1643","contentType":"application/json","userRaw":"olcha_str","cmdRaw":"!pause","roleRaw":"admin","role":"admin","isSub":false,"sourceInput":"n8n","messageId":"pause-1","tsInput":1730000100000}
+[chat][parse] {"ts":"2026-02-27T22:53:37.512Z","env":"unknown","source":"n8n","eventId":"c325b406-1c11-44fe-a4db-6903d44a1643","userRaw":"olcha_str","cmdRaw":"!pause","roleRaw":"admin","cmd":"pause","args":[]}
+[chat][result] {"ts":"2026-02-27T22:53:37.513Z","env":"unknown","source":"n8n","eventId":"c325b406-1c11-44fe-a4db-6903d44a1643","ok":true}
 [tipply][goal] baseline 54.00
+[chat][recv] {"ts":"2026-02-27T22:53:37.538Z","env":"unknown","source":"n8n","eventId":"a6ec9682-d9dc-407a-aff4-10d442b42cc0","contentType":"application/json","userRaw":"olcha_str","cmdRaw":"!resume","roleRaw":"admin","role":"admin","isSub":false,"sourceInput":"n8n","messageId":"resume-1","tsInput":1730000105000}
+[chat][parse] {"ts":"2026-02-27T22:53:37.538Z","env":"unknown","source":"n8n","eventId":"a6ec9682-d9dc-407a-aff4-10d442b42cc0","userRaw":"olcha_str","cmdRaw":"!resume","roleRaw":"admin","cmd":"resume","args":[]}
+[chat][result] {"ts":"2026-02-27T22:53:37.538Z","env":"unknown","source":"n8n","eventId":"a6ec9682-d9dc-407a-aff4-10d442b42cc0","ok":true}
 [streamlabs] connected
-[chat][recv] {"ts":"2026-02-26T17:49:44.148Z","env":"unknown","source":"n8n","eventId":"feeca06a-c2c8-4da3-a15a-a41f00b66f83","contentType":"application/json","userRaw":"olcha_str","cmdRaw":"!attack","roleRaw":"viewer","role":"viewer","isSub":false,"sourceInput":"n8n","messageId":"k123","tsInput":"2026-02-26T12:00:00Z"}
-[chat][parse] {"ts":"2026-02-26T17:49:44.165Z","env":"unknown","source":"n8n","eventId":"feeca06a-c2c8-4da3-a15a-a41f00b66f83","userRaw":"olcha_str","cmdRaw":"!attack","roleRaw":"viewer","cmd":"attack","args":[]}
-[chat][result] {"ts":"2026-02-26T17:49:44.166Z","env":"unknown","source":"n8n","eventId":"feeca06a-c2c8-4da3-a15a-a41f00b66f83","ok":true}

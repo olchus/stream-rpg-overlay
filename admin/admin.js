@@ -24,6 +24,7 @@ const toastEl = document.getElementById("toast");
 let toastTimer = null;
 let playersCache = [];
 const sortState = { key: "xp", dir: "asc" };
+let liveSocket = null;
 
 function setLog(message) {
   logEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -47,6 +48,30 @@ function renderState(state) {
   bossMaxHpEl.textContent = String(state?.bossMaxHp ?? "--");
   phaseEl.textContent = String(state?.phase ?? "--");
   pausedEl.textContent = state?.paused ? "true" : "false";
+}
+
+function setupLiveStateUpdates() {
+  if (typeof window.io !== "function") {
+    setLog("live: socket.io client unavailable");
+    return;
+  }
+
+  liveSocket = window.io();
+  liveSocket.on("connect", () => setLog("live: connected"));
+  liveSocket.on("disconnect", () => setLog("live: disconnected"));
+  liveSocket.on("state", (payload) => {
+    if (!payload || typeof payload !== "object") return;
+
+    const prevPaused = pausedEl.textContent;
+    renderState(payload);
+    const nextPaused = payload?.paused ? "true" : "false";
+    if (prevPaused !== nextPaused) {
+      setLog(`live: paused=${nextPaused}`);
+    }
+    if (payload.toast) {
+      showToast(payload.toast);
+    }
+  });
 }
 
 function esc(value) {
@@ -362,6 +387,8 @@ logoutBtn.addEventListener("click", async () => {
 apiFetch("GET", "/session")
   .then(() => refreshState())
   .catch((e) => setLog(`error: ${e.message}`));
+
+setupLiveStateUpdates();
 
 setInterval(() => {
   refreshState().catch((e) => setLog(`error: ${e.message}`));

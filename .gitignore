@@ -29,3 +29,6 @@ data/
 .ssh/
 USERPROFILE.sshstream-rpg
 USERPROFILE.sshstream-rpg.pub
+
+# n8n specific
+.n8n/
