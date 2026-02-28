@@ -17,11 +17,15 @@ const eventBox = document.getElementById("eventBox");
 const eventTitle = document.getElementById("eventTitle");
 const eventTimer = document.getElementById("eventTimer");
 const eventMeta = document.getElementById("eventMeta");
+const totemBox = document.getElementById("totemBox");
+const totemHpText = document.getElementById("totemHpText");
+const totemBarFill = document.getElementById("totemBarFill");
 
 let toastTimer = null;
 let activeEvent = null;
 let currentPhase = 1;
 let streamLive = true;
+let currentTotem = null;
 
 socket.on("state", (s) => {
   const hp = s.bossHp ?? 0;
@@ -96,6 +100,7 @@ socket.on("state", (s) => {
 
   streamLive = s.streamLive !== false;
   activeEvent = s.activeEvent || null;
+  currentTotem = s.totem || null;
   renderEvent();
 });
 
@@ -105,7 +110,7 @@ function renderEvent() {
   if (!eventBox || !eventTitle || !eventTimer || !eventMeta) return;
 
   if (!activeEvent) {
-    eventTitle.textContent = "No active event";
+    eventTitle.textContent = "No event";
     eventTimer.textContent = "--:--";
     if (!streamLive) {
       eventMeta.textContent = "Stream offline - event timers paused";
@@ -114,11 +119,13 @@ function renderEvent() {
     } else {
       eventMeta.textContent = "Waiting for next random event";
     }
+    renderTotem(null, null);
     return;
   }
 
   eventTitle.textContent = String(activeEvent.title || "Active event");
   eventMeta.textContent = buildEventMetaText(activeEvent);
+  renderTotem(activeEvent, currentTotem);
   renderEventTimerOnly();
 }
 
@@ -175,11 +182,31 @@ function buildEventMetaText(ev) {
     return "Role Swap: !heal deals dmg / !attack heals boss";
   }
   if (type === "totem") {
-    const hp = Number.isFinite(Number(meta.hp)) ? Math.trunc(Number(meta.hp)) : 0;
-    const hpMax = Number.isFinite(Number(meta.hpMax)) ? Math.trunc(Number(meta.hpMax)) : 0;
-    return `Totem HP: ${hp}/${hpMax}`;
+    return "Destroy the totem before time runs out";
   }
   return String(ev?.description || "");
+}
+
+function renderTotem(ev, totem) {
+  if (!totemBox || !totemHpText || !totemBarFill) return;
+  const isTotemEvent = String(ev?.type || "").toLowerCase() === "totem";
+  const hp = Number(totem?.hp);
+  const maxHp = Number(totem?.maxHp);
+  const isAlive = Number.isFinite(hp) && Number.isFinite(maxHp) && maxHp > 0 && hp > 0;
+  const show = isTotemEvent && isAlive;
+
+  if (!show) {
+    totemBox.classList.add("isHidden");
+    return;
+  }
+
+  const clampedHp = Math.max(0, Math.trunc(hp));
+  const clampedMaxHp = Math.max(clampedHp, Math.trunc(maxHp));
+  const ratio = clampedMaxHp > 0 ? Math.max(0, Math.min(1, clampedHp / clampedMaxHp)) : 0;
+
+  totemHpText.textContent = `${clampedHp} / ${clampedMaxHp}`;
+  totemBarFill.style.width = `${ratio * 100}%`;
+  totemBox.classList.remove("isHidden");
 }
 
 function showToast(text) {

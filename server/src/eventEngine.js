@@ -19,6 +19,10 @@ function randomBetween(min, max) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+function isKnownEventType(type) {
+  return EVENT_TYPES.includes(String(type || "").toLowerCase());
+}
+
 function getEventTitle(type) {
   if (type === "shield") return "Break the Shield";
   if (type === "silence") return "Silence - UE disabled";
@@ -169,8 +173,10 @@ export function createEventEngine(deps) {
     if (type === "totem") {
       const hp = currentTotemHpForPhase(state.phase);
       return {
+        maxHp: hp,
         hpMax: hp,
         hp,
+        spawnedAt: now,
         destroyed: false
       };
     }
@@ -246,6 +252,34 @@ export function createEventEngine(deps) {
       broadcast(extra);
     }
     return true;
+  }
+
+  function forceStartEvent(typeRaw, now = nowMs()) {
+    const type = String(typeRaw || "").trim().toLowerCase();
+    if (!isKnownEventType(type)) {
+      return { ok: false, error: "invalid_event_type" };
+    }
+    if (!state.streamLive) {
+      return { ok: false, error: "stream_offline" };
+    }
+    if (safeInt(state.phase, 1) < 2) {
+      return { ok: false, error: "phase_below_2" };
+    }
+
+    if (state.activeEvent) {
+      endActiveEvent("force_replaced", now, { broadcast: false });
+    }
+    startEvent(type, now);
+    log("FORCE_START", { type, at: now });
+    return { ok: true, event: state.activeEvent };
+  }
+
+  function forceEndEvent(reason = "force_end", now = nowMs()) {
+    if (!state.activeEvent) {
+      return { ok: false, error: "no_active_event" };
+    }
+    endActiveEvent(reason, now);
+    return { ok: true };
   }
 
   function pauseEventTimers(now = nowMs()) {
@@ -356,6 +390,16 @@ export function createEventEngine(deps) {
     return state.activeEvent?.type === "totem" && safeInt(state.activeEvent?.meta?.hp, 0) > 0;
   }
 
+  function getTotemState() {
+    if (state.activeEvent?.type !== "totem") return null;
+    const meta = state.activeEvent.meta || {};
+    const hp = Math.max(0, safeInt(meta.hp, 0));
+    if (hp <= 0) return null;
+    const maxHp = Math.max(hp, safeInt(meta.maxHp ?? meta.hpMax, hp));
+    const spawnedAt = safeInt(meta.spawnedAt, safeInt(state.activeEvent?.startedAt, nowMs()));
+    return { hp, maxHp, spawnedAt };
+  }
+
   function computeBossDamageMultiplier(input = {}) {
     const command = String(input.command || "").toLowerCase();
     const now = safeInt(input.now, nowMs());
@@ -457,20 +501,28 @@ export function createEventEngine(deps) {
 
     const nextHp = Math.max(0, currentHp - dmg);
     meta.hp = nextHp;
-    meta.hpMax = Math.max(nextHp, safeInt(meta.hpMax, nextHp));
+    meta.maxHp = Math.max(nextHp, safeInt(meta.maxHp ?? meta.hpMax, nextHp));
+    meta.hpMax = meta.maxHp;
     meta.destroyed = nextHp <= 0;
     state.activeEvent.meta = meta;
 
     const destroyed = nextHp <= 0;
+    const now = safeInt(input.now, nowMs());
+    const lastHitBy = normalizeUsername(input.user || "unknown");
     if (destroyed) {
-      endActiveEvent("totem_destroyed", safeInt(input.now, nowMs()), { broadcast: false });
+      const startedAt = safeInt(state.activeEvent?.startedAt, now);
+      const durationMs = Math.max(0, now - startedAt);
+      log("TOTEM DESTROYED", { lastHitBy, durationMs, startedAt, endedAt: now });
+      endActiveEvent("totem_destroyed", now, { broadcast: false });
     }
 
     return {
       ok: true,
       dmg,
       hp: nextHp,
-      hpMax: safeInt(meta.hpMax, nextHp),
+      maxHp: safeInt(meta.maxHp, nextHp),
+      hpMax: safeInt(meta.maxHp, nextHp),
+      lastHitBy,
       destroyed
     };
   }
@@ -490,9 +542,12 @@ export function createEventEngine(deps) {
     getConfig,
     setStreamLive,
     touchUserActivity,
+    forceStartEvent,
+    forceEndEvent,
     isSilenceActive,
     isRoleSwapActive,
     isTotemActive,
+    getTotemState,
     computeBossDamageMultiplier,
     computeXpMultiplier,
     onBossHitByCommand,

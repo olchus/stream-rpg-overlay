@@ -89,11 +89,19 @@ state.chaosForced = null; // null = normal, true/false = forced
 let streamlabsClient = null;
 let eventEngine = null;
 
-function broadcastState(extra = {}) {
-  io.emit("state", {
+function buildStatePayload(extra = {}) {
+  const payload = {
     ...state,
     ...extra
-  });
+  };
+  const totem = eventEngine?.getTotemState?.() || null;
+  if (totem) payload.totem = totem;
+  else delete payload.totem;
+  return payload;
+}
+
+function broadcastState(extra = {}) {
+  io.emit("state", buildStatePayload(extra));
 }
 
 function ensureUser(usernameRaw) {
@@ -218,7 +226,7 @@ app.get("/health", (_req, res) => {
 
 // Debug endpoint (optional)
 app.get("/api/state", (_req, res) => {
-  res.json({ ...state, leaderboards: getLeaderboards() });
+  res.json(buildStatePayload({ leaderboards: getLeaderboards() }));
 });
 
 app.post("/api/stream/status", (req, res) => {
@@ -244,6 +252,37 @@ app.post("/api/stream/status", (req, res) => {
     broadcastState({ leaderboards: getLeaderboards() });
   }
   return res.json({ ok: true, live: state.streamLive, changed });
+});
+
+app.post("/api/dev/force-event", (req, res) => {
+  const secret = String(env.DEV_EVENT_SECRET || env.STREAM_STATUS_SECRET || env.CMD_WEBHOOK_SECRET || "").trim();
+  if (!secret) {
+    return res.status(500).json({ ok: false, error: "missing dev event secret" });
+  }
+
+  const provided = String(
+    req.header("x-dev-secret") ||
+    req.header("x-stream-secret") ||
+    req.query?.secret ||
+    req.body?.secret ||
+    ""
+  ).trim();
+  if (!timingSafeEq(provided, secret)) {
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  }
+
+  const type = String(req.body?.type || req.query?.type || "").trim().toLowerCase();
+  const result = eventEngine?.forceStartEvent?.(type, nowMs()) || { ok: false, error: "engine_missing" };
+  if (!result.ok) {
+    return res.status(400).json({ ok: false, error: result.error || "force_event_failed" });
+  }
+
+  broadcastState({ leaderboards: getLeaderboards(), toast: `[DEV] Forced event: ${type}` });
+  return res.json({
+    ok: true,
+    type,
+    state: buildStatePayload({})
+  });
 });
 
 // Streamlabs OAuth (authorize app to get socket token)
@@ -339,7 +378,7 @@ startTipplyGoalPoller({
 });
 
 io.on("connection", (socket) => {
-  socket.emit("state", { ...state, leaderboards: getLeaderboards() });
+  socket.emit("state", buildStatePayload({ leaderboards: getLeaderboards() }));
 });
 
 // ----- Streamlabs events -----

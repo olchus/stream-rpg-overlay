@@ -44,6 +44,7 @@ const COOLDOWN_FIELD_BY_SLOT = {
   heal: "last_heal_ms",
   ue: "last_ue_ms"
 };
+const TOTEM_BOSS_DAMAGE_RATIO = 0.5;
 
 function sendChaosTaskWebhook(env, task, user) {
   const url = String(env?.CHAOS_TASK_WEBHOOK_URL || "").trim();
@@ -343,7 +344,7 @@ export function handleCommand(ctx) {
   if (cmd === "totem") {
     if (ctx.state.paused) return { ok: false, message: "paused" };
     if (!(ctx.eventEngine?.isTotemActive?.())) {
-      return { ok: false, message: "Totem is not active" };
+      return { ok: false, message: "No totem right now" };
     }
 
     const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
@@ -355,8 +356,9 @@ export function handleCommand(ctx) {
     const attack = computeAttackBase(ctx, row);
     const totemHit = ctx.eventEngine?.damageTotem?.({ user, amount: attack.dmg, now }) || { ok: false };
     if (!totemHit.ok) {
-      return { ok: false, message: "Totem cannot be damaged now" };
+      return { ok: false, message: "No totem right now" };
     }
+    const bossDamage = clamp(Math.floor(attack.dmg * TOTEM_BOSS_DAMAGE_RATIO), 0, 999999);
 
     const totemXpExtra = safeInt(ctx.eventEngine?.getConfig?.()?.totemXpExtra, 10);
     const xpGain = Math.max(0, 2 + totemXpExtra);
@@ -370,13 +372,29 @@ export function handleCommand(ctx) {
       source: commandSource,
       baseAttack: attack.dmg,
       hp: totemHit.hp,
-      hpMax: totemHit.hpMax,
+      maxHp: totemHit.maxHp ?? totemHit.hpMax,
       destroyed: totemHit.destroyed,
+      bossDamage,
       xpGain
     }));
 
+    let bossDefeatSuffix = "";
+    if (bossDamage > 0) {
+      const result = applyDamage(ctx.state, user, bossDamage, `${commandSource}_totem_boss`);
+      ctx.recordEvent(user, "chat_totem_boss", bossDamage, JSON.stringify({
+        source: commandSource,
+        baseAttack: attack.dmg,
+        ratio: TOTEM_BOSS_DAMAGE_RATIO
+      }));
+      if (result.defeated) {
+        ctx.state.phaseWinners = ctx.getPhaseWinners?.(ctx.state.phaseStartMs) || [];
+        ctx.state.phaseStartMs = nowMs();
+        bossDefeatSuffix = " | Boss defeated!";
+      }
+    }
+
     const destroyedText = totemHit.destroyed ? " | Totem destroyed! Event ended." : "";
-    const actionToast = `${user} !totem -> -${attack.dmg} [${totemHit.hp}/${totemHit.hpMax}]${destroyedText}`;
+    const actionToast = `${user} !totem -> Totem -${attack.dmg} [${totemHit.hp}/${totemHit.maxHp ?? totemHit.hpMax}] | Boss -${bossDamage}${destroyedText}${bossDefeatSuffix}`;
     const toast = updated?.skillUps > 0
       ? `${user} skill up! (skill: ${updated.skill}) | ${actionToast}`
       : actionToast;

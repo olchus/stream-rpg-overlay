@@ -104,7 +104,7 @@ export function initDb() {
   const topHittersToday = db.prepare(`
     SELECT username, SUM(amount) AS dmg
     FROM events
-    WHERE kind IN ('chat_attack','chat_ue','chat_heal_roleswap_dmg','sub_hit','donation_hit','follow_hit','kick_gift')
+    WHERE kind IN ('chat_attack','chat_ue','chat_totem_boss','chat_heal_roleswap_dmg','sub_hit','donation_hit','follow_hit','kick_gift')
       AND ts_ms >= ?
     GROUP BY username
     ORDER BY dmg DESC
@@ -114,7 +114,7 @@ export function initDb() {
   const topHittersInRange = db.prepare(`
     SELECT username, SUM(amount) AS dmg
     FROM events
-    WHERE kind IN ('chat_attack','chat_ue','chat_heal_roleswap_dmg','sub_hit','donation_hit','follow_hit','kick_gift')
+    WHERE kind IN ('chat_attack','chat_ue','chat_totem_boss','chat_heal_roleswap_dmg','sub_hit','donation_hit','follow_hit','kick_gift')
       AND ts_ms >= ? AND ts_ms <= ?
     GROUP BY username
     ORDER BY dmg DESC
@@ -150,7 +150,7 @@ export function initDb() {
       u.skill_tries,
       COALESCE(SUM(
         CASE
-          WHEN e.kind IN ('chat_attack','chat_ue','chat_heal_roleswap_dmg','sub_hit','donation_hit','follow_hit','kick_gift')
+          WHEN e.kind IN ('chat_attack','chat_ue','chat_totem_boss','chat_heal_roleswap_dmg','sub_hit','donation_hit','follow_hit','kick_gift')
             THEN e.amount
           ELSE 0
         END
