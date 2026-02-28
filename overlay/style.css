@@ -90,6 +90,39 @@ body {
   opacity: .85;
 }
 
+.eventBox {
+  margin-top: 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,.03);
+}
+
+.eventHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.eventTitle {
+  font-weight: 800;
+  font-size: 14px;
+}
+
+.eventTimer {
+  font-family: "Courier New", monospace;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.eventMeta {
+  margin-top: 6px;
+  font-size: 13px;
+  opacity: .9;
+  line-height: 1.25;
+}
+
 .lb {
   display:flex;
   justify-content: space-between;

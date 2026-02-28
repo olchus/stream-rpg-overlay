@@ -64,6 +64,7 @@ export function registerAdminApi(app, deps) {
     env,
     state,
     db,
+    eventEngine,
     broadcastState,
     getLeaderboards,
     updateUser,
@@ -186,7 +187,9 @@ export function registerAdminApi(app, deps) {
       skill: existing?.skill ?? skillStart,
       skill_tries: existing?.skill_tries ?? 0,
       last_attack_ms: existing?.last_attack_ms ?? 0,
-      last_heal_ms: existing?.last_heal_ms ?? 0
+      last_heal_ms: existing?.last_heal_ms ?? 0,
+      last_ue_ms: existing?.last_ue_ms ?? 0,
+      last_offensive_ms: existing?.last_offensive_ms ?? 0
     });
     return { username, xp, level, skill: existing?.skill ?? skillStart };
   }
@@ -204,7 +207,9 @@ export function registerAdminApi(app, deps) {
       skill: safeInt(row.skill, skillStart),
       skillTries: safeInt(row.skill_tries, 0),
       lastAttackMs: safeInt(row.last_attack_ms, 0),
-      lastHealMs: safeInt(row.last_heal_ms, 0)
+      lastHealMs: safeInt(row.last_heal_ms, 0),
+      lastUeMs: safeInt(row.last_ue_ms, 0),
+      lastOffensiveMs: safeInt(row.last_offensive_ms, 0)
     };
   }
 
@@ -470,6 +475,7 @@ export function registerAdminApi(app, deps) {
   app.post("/api/admin/boss/phase", (req, res) => {
     const phase = clamp(safeInt(req.body?.n, state.phase), 1, 9999);
     setBossPhase(state, phase);
+    eventEngine?.syncNow?.();
     const actor = writeAudit(req, "boss_phase", { phase: state.phase });
     const leaderboards = getLeaderboards();
     broadcastState({ leaderboards, toast: `PHASE ${state.phase} forced by ${actor}` });
@@ -487,7 +493,7 @@ export function registerAdminApi(app, deps) {
     }
 
     try {
-      db.db.exec("UPDATE users SET xp=0, level=1, last_attack_ms=0, last_heal_ms=0;");
+      db.db.exec("UPDATE users SET xp=0, level=1, last_attack_ms=0, last_heal_ms=0, last_ue_ms=0, last_offensive_ms=0;");
       const actor = writeAudit(req, "users_resetxp", {});
       const leaderboards = getLeaderboards();
       broadcastState({ leaderboards, toast: `XP reset by ${actor}` });

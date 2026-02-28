@@ -21,6 +21,7 @@ import {
 import { nowMs, safeInt, safeNumber, normalizeUsername } from "./util.js";
 import { registerWebhooks } from "./webhooks.js";
 import { registerAdminApi } from "./admin.js";
+import { createEventEngine } from "./eventEngine.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -60,6 +61,24 @@ function newOauthState() {
   return s;
 }
 
+function timingSafeEq(a, b) {
+  const aa = Buffer.from(String(a || ""));
+  const bb = Buffer.from(String(b || ""));
+  if (aa.length !== bb.length) return false;
+  return crypto.timingSafeEqual(aa, bb);
+}
+
+function parseBoolean(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
 const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: { origin: "*" } });
 
@@ -68,6 +87,7 @@ const state = createGameState({ BOSS_MAX_HP });
 state.paused = false;
 state.chaosForced = null; // null = normal, true/false = forced
 let streamlabsClient = null;
+let eventEngine = null;
 
 function broadcastState(extra = {}) {
   io.emit("state", {
@@ -80,7 +100,17 @@ function ensureUser(usernameRaw) {
   const username = normalizeUsername(usernameRaw);
   const row = dbh.getUser.get(username);
   if (row) return row;
-  const init = { username, xp: 0, level: 1, skill: SKILL_START, skill_tries: 0, last_attack_ms: 0, last_heal_ms: 0 };
+  const init = {
+    username,
+    xp: 0,
+    level: 1,
+    skill: SKILL_START,
+    skill_tries: 0,
+    last_attack_ms: 0,
+    last_heal_ms: 0,
+    last_ue_ms: 0,
+    last_offensive_ms: 0
+  };
   dbh.upsertUser.run(init);
   return init;
 }
@@ -91,8 +121,18 @@ function updateUser(username, xpAdd, maybeLastAttackMs = null, maybeLastHealMs =
   const skillTriesAdd = Math.max(0, safeInt(extra?.skillTriesAdd, 0));
   const nextSkill = awardSkill(user.skill, user.skill_tries, skillTriesAdd, SKILL_CFG);
 
-  const last_attack_ms = maybeLastAttackMs !== null ? maybeLastAttackMs : user.last_attack_ms;
-  const last_heal_ms = maybeLastHealMs !== null ? maybeLastHealMs : user.last_heal_ms;
+  const cooldowns = extra?.cooldowns && typeof extra.cooldowns === "object" ? extra.cooldowns : {};
+  let last_attack_ms = maybeLastAttackMs !== null ? maybeLastAttackMs : safeInt(user.last_attack_ms, 0);
+  let last_heal_ms = maybeLastHealMs !== null ? maybeLastHealMs : safeInt(user.last_heal_ms, 0);
+  let last_ue_ms = safeInt(user.last_ue_ms, 0);
+  let last_offensive_ms = safeInt(user.last_offensive_ms, 0);
+
+  if (cooldowns.attack !== undefined) last_attack_ms = safeInt(cooldowns.attack, last_attack_ms);
+  if (cooldowns.heal !== undefined) last_heal_ms = safeInt(cooldowns.heal, last_heal_ms);
+  if (cooldowns.ue !== undefined) last_ue_ms = safeInt(cooldowns.ue, last_ue_ms);
+  if (Object.prototype.hasOwnProperty.call(extra, "lastOffensiveMs")) {
+    last_offensive_ms = safeInt(extra.lastOffensiveMs, last_offensive_ms);
+  }
 
   dbh.upsertUser.run({
     username: user.username,
@@ -101,7 +141,9 @@ function updateUser(username, xpAdd, maybeLastAttackMs = null, maybeLastHealMs =
     skill: nextSkill.skill,
     skill_tries: nextSkill.skillTries,
     last_attack_ms,
-    last_heal_ms
+    last_heal_ms,
+    last_ue_ms,
+    last_offensive_ms
   });
 
   return {
@@ -112,7 +154,9 @@ function updateUser(username, xpAdd, maybeLastAttackMs = null, maybeLastHealMs =
     skill_tries: nextSkill.skillTries,
     skillUps: nextSkill.skillUps,
     last_attack_ms,
-    last_heal_ms
+    last_heal_ms,
+    last_ue_ms,
+    last_offensive_ms
   };
 }
 
@@ -135,6 +179,15 @@ function getPhaseWinners(_phaseStartMs) {
   const winners = dbh.topUsersByXp.all(3);
   return winners || [];
 }
+
+eventEngine = createEventEngine({
+  state,
+  env,
+  db: dbh,
+  updateUser,
+  broadcastState,
+  getLeaderboards
+});
 
 // Serve overlay as static
 const __filename = fileURLToPath(import.meta.url);
@@ -166,6 +219,31 @@ app.get("/health", (_req, res) => {
 // Debug endpoint (optional)
 app.get("/api/state", (_req, res) => {
   res.json({ ...state, leaderboards: getLeaderboards() });
+});
+
+app.post("/api/stream/status", (req, res) => {
+  const secret = String(env.STREAM_STATUS_SECRET || env.CMD_WEBHOOK_SECRET || "").trim();
+  if (!secret) {
+    return res.status(500).json({ ok: false, error: "missing stream status secret" });
+  }
+
+  const provided = String(
+    req.header("x-stream-secret") ||
+    req.header("x-cmd-secret") ||
+    req.query?.secret ||
+    req.body?.secret ||
+    ""
+  ).trim();
+  if (!timingSafeEq(provided, secret)) {
+    return res.status(401).json({ ok: false, error: "unauthorized" });
+  }
+
+  const live = parseBoolean(req.body?.live ?? req.query?.live, state.streamLive);
+  const changed = eventEngine?.setStreamLive?.(live, "api_stream_status") || false;
+  if (!changed) {
+    broadcastState({ leaderboards: getLeaderboards() });
+  }
+  return res.json({ ok: true, live: state.streamLive, changed });
 });
 
 // Streamlabs OAuth (authorize app to get socket token)
@@ -217,6 +295,7 @@ registerWebhooks(app, {
   state,
   auth,
   db: dbh,
+  eventEngine,
   broadcastState,
   updateUser,
   recordEvent,
@@ -228,6 +307,7 @@ registerAdminApi(app, {
   env,
   state,
   db: dbh,
+  eventEngine,
   broadcastState,
   getLeaderboards,
   updateUser,
@@ -239,6 +319,7 @@ app.use("/admin", express.static(adminDir, { redirect: false }));
 registerTipplyWebhook(app, {
   env,
   state,
+  eventEngine,
   broadcastState,
   updateUser,
   recordEvent,
@@ -249,6 +330,7 @@ registerTipplyWebhook(app, {
 startTipplyGoalPoller({
   env,
   state,
+  eventEngine,
   broadcastState,
   updateUser,
   recordEvent,
@@ -272,11 +354,13 @@ function handleStreamlabsEvent(data) {
 
     // dmg: amount * mult; also scale by phase (hardcore)
     const phaseMult = state.phase >= 4 ? 2 : state.phase === 3 ? 1.5 : state.phase === 2 ? 1.2 : 1;
-    const dmg = amount * DONATE_DMG_MULT * phaseMult;
+    const dmgBase = amount * DONATE_DMG_MULT * phaseMult;
+    const eventMult = eventEngine?.computeBossDamageMultiplier?.({ command: "system" })?.mult ?? 1;
+    const dmg = Math.max(0, Math.round(dmgBase * eventMult));
     if (dmg <= 0) return;
 
     updateUser(who, 20 + Math.min(100, dmg / 10));
-    recordEvent(who, "donation_hit", dmg, JSON.stringify({ amount }));
+    recordEvent(who, "donation_hit", dmg, JSON.stringify({ amount, eventMult }));
 
     const chaos = maybeChaos(state, CHAOS_ENABLED, CHAOS_DONATE_THRESHOLD, amount);
     const result = applyDamage(state, who, dmg, "streamlabs_donation");
@@ -295,10 +379,12 @@ function handleStreamlabsEvent(data) {
 
   if (type === "subscription") {
     const who = normalizeUsername(msg?.name || "sub");
-    const dmg = SUB_DAMAGE;
+    const eventMult = eventEngine?.computeBossDamageMultiplier?.({ command: "system" })?.mult ?? 1;
+    const dmg = Math.max(0, Math.round(SUB_DAMAGE * eventMult));
+    if (dmg <= 0) return;
 
     updateUser(who, 50);
-    recordEvent(who, "sub_hit", dmg, "sub");
+    recordEvent(who, "sub_hit", dmg, JSON.stringify({ eventMult }));
 
     const result = applyDamage(state, who, dmg, "streamlabs_sub");
     if (result.defeated) {
@@ -315,10 +401,12 @@ function handleStreamlabsEvent(data) {
 
   if (type === "follow") {
     const who = normalizeUsername(msg?.name || "follow");
-    const dmg = FOLLOW_DAMAGE;
+    const eventMult = eventEngine?.computeBossDamageMultiplier?.({ command: "system" })?.mult ?? 1;
+    const dmg = Math.max(0, Math.round(FOLLOW_DAMAGE * eventMult));
+    if (dmg <= 0) return;
 
     updateUser(who, 10);
-    recordEvent(who, "follow_hit", dmg, "follow");
+    recordEvent(who, "follow_hit", dmg, JSON.stringify({ eventMult }));
 
     const result = applyDamage(state, who, dmg, "streamlabs_follow");
     if (result.defeated) {
@@ -384,6 +472,8 @@ setInterval(() => {
     console.log("[db] cleanup error:", e?.message || e);
   }
 }, 60 * 60 * 1000);
+
+eventEngine.start();
 
 httpServer.listen(PORT, () => {
   console.log(`[app] listening on :${PORT}`);

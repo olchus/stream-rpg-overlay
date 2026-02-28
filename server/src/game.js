@@ -33,7 +33,12 @@ export function createGameState(env) {
     chaosLast: null, // {kind, ts, text}
     phaseWinners: [], // top 3 by XP
     phaseWinnersPhase: null, // phase number that was just defeated
-    startedAtMs: nowMs()
+    startedAtMs: nowMs(),
+    streamLive: true,
+    activeEvent: null,
+    nextEventAt: null,
+    nextEventPausedRemainingMs: null,
+    lastEventType: null
   };
 }
 

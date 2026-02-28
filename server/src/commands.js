@@ -1,5 +1,5 @@
 import { normalizeUsername, safeInt, clamp, nowMs, pickRandom } from "./util.js";
-import { applyDamage, maybeChaos, setBossPhase } from "./game.js";
+import { applyDamage, setBossPhase } from "./game.js";
 import { canRun } from "./auth.js";
 
 const CHAOS_TASKS = [
@@ -15,23 +15,47 @@ const CHAOS_TASKS = [
   "Otwierasz stash i losujesz jeden item do uzycia na hunt.",
   "Grasz na full waste przez 30 minut (liczymy straty).",
   "Jesli padniesz -> robisz giveaway 1kk.",
-  "Musisz utrzymac min. X exp/h – jesli spadnie -> zmiana spawna.",
+  "Musisz utrzymac min. X exp/h, jesli spadnie -> zmiana spawna.",
   "20 minut bez healowania exura (med) ico (tylko poty).",
   "MSem solo na miejscu \"nie dla MS\"."
 ];
 
+const COMMAND_COOLDOWN_SLOTS = {
+  attack: "attack",
+  heal: "heal",
+  ue: "ue",
+  totem: "attack"
+};
+
+const COMMAND_COOLDOWN_ENV_KEYS = {
+  attack: "CHAT_ATTACK_COOLDOWN_MS",
+  heal: "CHAT_HEAL_COOLDOWN_MS",
+  ue: "CHAT_UE_COOLDOWN_MS"
+};
+
+const COMMAND_COOLDOWN_DEFAULT_MS = {
+  attack: 60000,
+  heal: 120000,
+  ue: 213700
+};
+
+const COOLDOWN_FIELD_BY_SLOT = {
+  attack: "last_attack_ms",
+  heal: "last_heal_ms",
+  ue: "last_ue_ms"
+};
+
 function sendChaosTaskWebhook(env, task, user) {
   const url = String(env?.CHAOS_TASK_WEBHOOK_URL || "").trim();
   if (!url) return;
+
   const secret = String(env?.CMD_WEBHOOK_SECRET || "").trim();
-  const message = `😵‍💫💥CHAOS TASK: ${task} 😵‍💫💥`;
-  const messageAscii = `CHAOS TASK: ${task}`;
+  const message = `CHAOS TASK: ${task}`;
   const target = new URL(url);
-  // Keep query params as fallback for workflows reading webhook query instead of JSON body.
   target.searchParams.set("message", message);
   target.searchParams.set("text", message);
   target.searchParams.set("content", message);
-  target.searchParams.set("message_ascii", messageAscii);
+  target.searchParams.set("message_ascii", message);
   target.searchParams.set("task", task);
   target.searchParams.set("by", user);
 
@@ -45,7 +69,7 @@ function sendChaosTaskWebhook(env, task, user) {
       message,
       text: message,
       content: message,
-      message_ascii: messageAscii,
+      message_ascii: message,
       task,
       by: user
     })
@@ -67,10 +91,59 @@ function parseArgs(text) {
   return { cmd, args: parts };
 }
 
+function resolveCooldownMs(env, command) {
+  const slot = COMMAND_COOLDOWN_SLOTS[command] || command;
+  const envKey = COMMAND_COOLDOWN_ENV_KEYS[slot];
+  const fallback = COMMAND_COOLDOWN_DEFAULT_MS[slot] ?? 60000;
+  return safeInt(env?.[envKey], fallback);
+}
+
+function getCooldownInfo(env, row, command, now) {
+  const slot = COMMAND_COOLDOWN_SLOTS[command] || command;
+  const field = COOLDOWN_FIELD_BY_SLOT[slot];
+  const cooldownMs = resolveCooldownMs(env, slot);
+  const lastMs = safeInt(row?.[field], 0);
+  const remainingMs = Math.max(0, cooldownMs - (now - lastMs));
+  return {
+    slot,
+    cooldownMs,
+    remainingMs,
+    blocked: remainingMs > 0
+  };
+}
+
+function cooldownUpdateForCommand(command, now) {
+  const slot = COMMAND_COOLDOWN_SLOTS[command] || command;
+  return { [slot]: now };
+}
+
+function computeAttackBase(ctx, row) {
+  const dmgBase = safeInt(ctx.env.CHAT_ATTACK_DAMAGE, 5);
+  const skillStart = Math.max(1, safeInt(ctx.env.SKILL_START, 1));
+  const skillTryPerAttack = Math.max(0, safeInt(ctx.env.SKILL_TRY_PER_ATTACK, 1));
+  const userSkill = Math.max(skillStart, safeInt(row?.skill, skillStart));
+  const isSub = ctx.isSub === true;
+  const subBonus = isSub ? 5 : 0;
+  const dmg = clamp(dmgBase + userSkill + subBonus, 1, 9999);
+  return {
+    dmgBase,
+    skillTryPerAttack,
+    userSkill,
+    isSub,
+    subBonus,
+    dmg,
+    breakdown: `base ${dmgBase} + skill ${userSkill} + sub ${subBonus}`
+  };
+}
+
+function markBrokenSuffix(markResult) {
+  if (!markResult?.brokenNow) return "";
+  return ` | MARK BROKEN by ${markResult.markedUser} (+${markResult.bonusXp} XP)`;
+}
+
 export function handleCommand(ctx) {
   // ctx:
-  // { user, role, rawText, isSub, state, env, db, broadcastState, recordEvent, updateUser, getLeaderboards, auth }
-//console.log("[cmd]", { user: ctx.user, role: ctx.role, rawText: ctx.rawText });
+  // { user, role, rawText, isSub, state, env, db, eventEngine, broadcastState, recordEvent, updateUser, getLeaderboards, auth }
   const userRaw = ctx?.userRaw ?? ctx?.user ?? "";
   const cmdRaw = ctx?.cmdRaw ?? ctx?.rawText ?? "";
   const roleRaw = ctx?.roleRaw ?? ctx?.role ?? "";
@@ -80,6 +153,9 @@ export function handleCommand(ctx) {
   const eventId = ctx?.eventId || "na";
 
   const user = normalizeUsername(ctx.user);
+  const now = nowMs();
+  ctx.eventEngine?.touchUserActivity?.(user, now);
+
   const { cmd, args } = parseArgs(ctx.rawText);
   let cmdNorm = cmd;
   let bosshitInline = null;
@@ -88,9 +164,7 @@ export function handleCommand(ctx) {
     cmdNorm = "bosshit";
     bosshitInline = bosshitMatch[1];
   }
-  if (cmdNorm === "makechaos") {
-    cmdNorm = "maybechaos";
-  }
+  if (cmdNorm === "makechaos") cmdNorm = "maybechaos";
 
   console.log(
     "[chat][parse]",
@@ -114,7 +188,6 @@ export function handleCommand(ctx) {
     return { ok: false, message: "paused" };
   }
 
-  // routing komend: viewer
   if (cmdNorm === "bosshp") {
     const hp = safeInt(ctx.state?.bossHp, 0);
     const max = safeInt(ctx.state?.bossMaxHp, 0);
@@ -138,42 +211,175 @@ export function handleCommand(ctx) {
   if (cmd === "attack") {
     if (ctx.state.paused) return { ok: false, message: "paused" };
 
-    const dmgBase = safeInt(ctx.env.CHAT_ATTACK_DAMAGE, 5);
-    const skillStart = Math.max(1, safeInt(ctx.env.SKILL_START, 1));
-    const skillTryPerAttack = Math.max(0, safeInt(ctx.env.SKILL_TRY_PER_ATTACK, 1));
-    const cooldownMs = safeInt(ctx.env.CHAT_ATTACK_COOLDOWN_MS, 60000);
-    const now = nowMs();
     const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
-    const lastAttackMs = row?.last_attack_ms ?? 0;
-    const userSkill = Math.max(skillStart, safeInt(row?.skill, skillStart));
-    const isSub = ctx.isSub === true;
-    const subBonus = isSub ? 5 : 0;
-    const dmg = clamp(dmgBase + userSkill + subBonus, 1, 9999);
-
-    if (now - lastAttackMs < cooldownMs) {
-      return { ok: false, silent: true, reason: "cooldown_attack" };
+    const cooldown = getCooldownInfo(ctx.env, row, "attack", now);
+    if (cooldown.blocked) {
+      return { ok: false, silent: true, reason: `cooldown_${cooldown.slot}` };
     }
 
-    const updated = ctx.updateUser(user, 2, now, null, { skillTriesAdd: skillTryPerAttack });
-    const breakdown = `base ${dmgBase} + skill ${userSkill} + sub ${subBonus}`;
+    const attack = computeAttackBase(ctx, row);
+    const cooldowns = cooldownUpdateForCommand("attack", now);
+    const xpBase = 2;
+
+    if (ctx.eventEngine?.isRoleSwapActive?.()) {
+      const healAmount = attack.dmg;
+      ctx.state.bossHp = Math.min(ctx.state.bossMaxHp, ctx.state.bossHp + healAmount);
+
+      const updated = ctx.updateUser(user, xpBase, null, null, {
+        skillTriesAdd: attack.skillTryPerAttack,
+        cooldowns,
+        lastOffensiveMs: now
+      });
+
+      ctx.recordEvent(user, "chat_attack_roleswap_heal", healAmount, JSON.stringify({
+        source: commandSource,
+        base: attack.dmgBase,
+        skill: attack.userSkill,
+        subBonus: attack.subBonus,
+        isSub: attack.isSub,
+        total: healAmount
+      }));
+
+      const actionToast = `${user} !attack -> +${healAmount} boss HP (Role Swap)`;
+      const toast = updated?.skillUps > 0
+        ? `${user} skill up! (skill: ${updated.skill}) | ${actionToast}`
+        : actionToast;
+      ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast });
+      return { ok: true };
+    }
+
+    const dmgMult = ctx.eventEngine?.computeBossDamageMultiplier?.({ user, command: "attack", now, row })?.mult ?? 1;
+    const xpMult = ctx.eventEngine?.computeXpMultiplier?.({ user, command: "attack", now, row })?.mult ?? 1;
+    const dmg = clamp(Math.round(attack.dmg * dmgMult), 0, 999999);
+    const xpGain = Math.max(0, Math.round(xpBase * xpMult));
+
+    const updated = ctx.updateUser(user, xpGain, null, null, {
+      skillTriesAdd: attack.skillTryPerAttack,
+      cooldowns,
+      lastOffensiveMs: now
+    });
+
     ctx.recordEvent(user, "chat_attack", dmg, JSON.stringify({
       source: commandSource,
-      base: dmgBase,
-      skill: userSkill,
-      subBonus,
-      isSub,
-      total: dmg
+      base: attack.dmgBase,
+      skill: attack.userSkill,
+      subBonus: attack.subBonus,
+      isSub: attack.isSub,
+      totalBeforeMult: attack.dmg,
+      totalAfterMult: dmg,
+      dmgMult,
+      xpBase,
+      xpMult,
+      xpGain
     }));
+
     const result = applyDamage(ctx.state, user, dmg, `${commandSource}_attack`);
     if (result.defeated) {
       ctx.state.phaseWinners = ctx.getPhaseWinners?.(ctx.state.phaseStartMs) || [];
       ctx.state.phaseStartMs = nowMs();
     }
 
-    const attackToast = `${user} !attack -> -${dmg} (${breakdown})`;
+    const markResult = ctx.eventEngine?.onBossHitByCommand?.({ user, command: "attack", now });
+    const actionToast = `${user} !attack -> -${dmg} (${attack.breakdown})${markBrokenSuffix(markResult)}`;
     const toast = updated?.skillUps > 0
-      ? `${user} skill up! (skill: ${updated.skill}) | ${attackToast}`
-      : attackToast;
+      ? `${user} skill up! (skill: ${updated.skill}) | ${actionToast}`
+      : actionToast;
+    ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast });
+    return { ok: true };
+  }
+
+  if (cmd === "ue") {
+    if (ctx.state.paused) return { ok: false, message: "paused" };
+    if (ctx.eventEngine?.isSilenceActive?.()) {
+      return { ok: false, message: "UE disabled during Silence" };
+    }
+
+    const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
+    const cooldown = getCooldownInfo(ctx.env, row, "ue", now);
+    if (cooldown.blocked) {
+      return { ok: false, silent: true, reason: `cooldown_${cooldown.slot}` };
+    }
+
+    const attack = computeAttackBase(ctx, row);
+    const ueBaseDamage = clamp(attack.dmg * 3, 1, 999999);
+    const dmgMult = ctx.eventEngine?.computeBossDamageMultiplier?.({ user, command: "ue", now, row })?.mult ?? 1;
+    const xpMult = ctx.eventEngine?.computeXpMultiplier?.({ user, command: "ue", now, row })?.mult ?? 1;
+    const dmg = clamp(Math.round(ueBaseDamage * dmgMult), 0, 999999);
+    const xpBase = 4;
+    const xpGain = Math.max(0, Math.round(xpBase * xpMult));
+
+    const updated = ctx.updateUser(user, xpGain, null, null, {
+      skillTriesAdd: attack.skillTryPerAttack,
+      cooldowns: cooldownUpdateForCommand("ue", now),
+      lastOffensiveMs: now
+    });
+
+    ctx.recordEvent(user, "chat_ue", dmg, JSON.stringify({
+      source: commandSource,
+      baseAttack: attack.dmg,
+      totalBeforeMult: ueBaseDamage,
+      totalAfterMult: dmg,
+      dmgMult,
+      xpBase,
+      xpMult,
+      xpGain
+    }));
+
+    const result = applyDamage(ctx.state, user, dmg, `${commandSource}_ue`);
+    if (result.defeated) {
+      ctx.state.phaseWinners = ctx.getPhaseWinners?.(ctx.state.phaseStartMs) || [];
+      ctx.state.phaseStartMs = nowMs();
+    }
+
+    const markResult = ctx.eventEngine?.onBossHitByCommand?.({ user, command: "ue", now });
+    const actionToast = `${user} !ue -> -${dmg}${markBrokenSuffix(markResult)}`;
+    const toast = updated?.skillUps > 0
+      ? `${user} skill up! (skill: ${updated.skill}) | ${actionToast}`
+      : actionToast;
+    ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast });
+    return { ok: true };
+  }
+
+  if (cmd === "totem") {
+    if (ctx.state.paused) return { ok: false, message: "paused" };
+    if (!(ctx.eventEngine?.isTotemActive?.())) {
+      return { ok: false, message: "Totem is not active" };
+    }
+
+    const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
+    const cooldown = getCooldownInfo(ctx.env, row, "totem", now);
+    if (cooldown.blocked) {
+      return { ok: false, silent: true, reason: `cooldown_${cooldown.slot}` };
+    }
+
+    const attack = computeAttackBase(ctx, row);
+    const totemHit = ctx.eventEngine?.damageTotem?.({ user, amount: attack.dmg, now }) || { ok: false };
+    if (!totemHit.ok) {
+      return { ok: false, message: "Totem cannot be damaged now" };
+    }
+
+    const totemXpExtra = safeInt(ctx.eventEngine?.getConfig?.()?.totemXpExtra, 10);
+    const xpGain = Math.max(0, 2 + totemXpExtra);
+
+    const updated = ctx.updateUser(user, xpGain, null, null, {
+      skillTriesAdd: attack.skillTryPerAttack,
+      cooldowns: cooldownUpdateForCommand("totem", now)
+    });
+
+    ctx.recordEvent(user, "chat_totem_hit", attack.dmg, JSON.stringify({
+      source: commandSource,
+      baseAttack: attack.dmg,
+      hp: totemHit.hp,
+      hpMax: totemHit.hpMax,
+      destroyed: totemHit.destroyed,
+      xpGain
+    }));
+
+    const destroyedText = totemHit.destroyed ? " | Totem destroyed! Event ended." : "";
+    const actionToast = `${user} !totem -> -${attack.dmg} [${totemHit.hp}/${totemHit.hpMax}]${destroyedText}`;
+    const toast = updated?.skillUps > 0
+      ? `${user} skill up! (skill: ${updated.skill}) | ${actionToast}`
+      : actionToast;
     ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast });
     return { ok: true };
   }
@@ -181,30 +387,47 @@ export function handleCommand(ctx) {
   if (cmd === "heal") {
     if (ctx.state.paused) return { ok: false, message: "paused" };
 
-    const cooldownMs = safeInt(ctx.env.CHAT_HEAL_COOLDOWN_MS, 120000);
-    const now = nowMs();
     const row = ctx.db?.getUser?.get ? ctx.db.getUser.get(user) : null;
-    const lastHealMs = row?.last_heal_ms ?? 0;
-    if (now - lastHealMs < cooldownMs) {
-      return { ok: false, silent: true };
+    const cooldown = getCooldownInfo(ctx.env, row, "heal", now);
+    if (cooldown.blocked) {
+      return { ok: false, silent: true, reason: `cooldown_${cooldown.slot}` };
     }
 
     const heal = 15;
+    const cooldowns = cooldownUpdateForCommand("heal", now);
+
+    if (ctx.eventEngine?.isRoleSwapActive?.()) {
+      const dmgMult = ctx.eventEngine?.computeBossDamageMultiplier?.({ user, command: "heal", now, row })?.mult ?? 1;
+      const dmg = clamp(Math.round(heal * dmgMult), 0, 999999);
+      ctx.updateUser(user, 5, null, null, { cooldowns });
+      ctx.recordEvent(user, "chat_heal_roleswap_dmg", dmg, JSON.stringify({
+        source: commandSource,
+        base: heal,
+        dmgMult,
+        total: dmg
+      }));
+
+      const result = applyDamage(ctx.state, user, dmg, `${commandSource}_heal_roleswap`);
+      if (result.defeated) {
+        ctx.state.phaseWinners = ctx.getPhaseWinners?.(ctx.state.phaseStartMs) || [];
+        ctx.state.phaseStartMs = nowMs();
+      }
+
+      ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `${user} !heal -> -${dmg} (Role Swap)` });
+      return { ok: true };
+    }
+
     ctx.state.bossHp = Math.min(ctx.state.bossMaxHp, ctx.state.bossHp + heal);
-
-    ctx.updateUser(user, 5, null, now);
+    ctx.updateUser(user, 5, null, null, { cooldowns });
     ctx.recordEvent(user, "chat_heal", heal, commandSource);
-
-    ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `${user} !heal → +${heal} 😈` });
+    ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `${user} !heal -> +${heal} boss HP` });
     return { ok: true };
   }
 
   // ---- ADMIN / MOD ----
-  // mapujemy aliasy admin komend
-  const adminCmd = cmdNorm === "boss" ? (args[0] || "").toLowerCase() : cmdNorm; // np. !boss reset
+  const adminCmd = cmdNorm === "boss" ? (args[0] || "").toLowerCase() : cmdNorm;
   const adminArgs = cmdNorm === "boss" ? args.slice(1) : args;
 
-  // Ustal “nazwa komendy do autoryzacji”
   const authKey =
     adminCmd === "reset" ? "reset" :
     adminCmd === "sethp" ? "sethp" :
@@ -227,6 +450,7 @@ export function handleCommand(ctx) {
 
     if (authKey === "reset") {
       setBossPhase(ctx.state, 1);
+      ctx.eventEngine?.syncNow?.();
       ctx.state.lastHits.unshift({ by: "SYSTEM", amount: 0, source: `RESET by ${user}`, ts: Date.now() });
       ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `BOSS RESET by ${user}` });
       return { ok: true };
@@ -256,6 +480,7 @@ export function handleCommand(ctx) {
     if (authKey === "phase") {
       const p = clamp(safeInt(adminArgs[0], ctx.state.phase), 1, 9999);
       setBossPhase(ctx.state, p);
+      ctx.eventEngine?.syncNow?.();
       ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `PHASE ${p} forced by ${user}` });
       return { ok: true };
     }
@@ -273,8 +498,6 @@ export function handleCommand(ctx) {
     }
 
     if (authKey === "setmult") {
-      // przykład: !setmult donate 12
-      // przechowujemy w state.runtimeOverrides
       ctx.state.runtimeOverrides ||= {};
       const key = String(adminArgs[0] || "");
       const val = safeInt(adminArgs[1], 0);
@@ -308,10 +531,10 @@ export function handleCommand(ctx) {
     if (authKey === "resetxp") {
       if (!ctx.db?.db) return { ok: false, message: "db missing" };
       try {
-        ctx.db.db.exec("UPDATE users SET xp=0, level=1, last_attack_ms=0, last_heal_ms=0;");
+        ctx.db.db.exec("UPDATE users SET xp=0, level=1, last_attack_ms=0, last_heal_ms=0, last_ue_ms=0, last_offensive_ms=0;");
         ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `XP reset by ${user}` });
         return { ok: true };
-      } catch (e) {
+      } catch {
         return { ok: false, message: "db error" };
       }
     }
@@ -320,11 +543,12 @@ export function handleCommand(ctx) {
       if (!ctx.db?.db) return { ok: false, message: "db missing" };
       try {
         setBossPhase(ctx.state, 1);
+        ctx.eventEngine?.syncNow?.();
         ctx.state.lastHits = [];
-        ctx.db.db.exec("DELETE FROM events; UPDATE users SET xp=0, level=1, last_attack_ms=0, last_heal_ms=0;");
+        ctx.db.db.exec("DELETE FROM events; UPDATE users SET xp=0, level=1, last_attack_ms=0, last_heal_ms=0, last_ue_ms=0, last_offensive_ms=0;");
         ctx.broadcastState({ leaderboards: ctx.getLeaderboards(), toast: `RESET ALL by ${user}` });
         return { ok: true };
-      } catch (e) {
+      } catch {
         return { ok: false, message: "db error" };
       }
     }

@@ -85,6 +85,7 @@ export function registerWebhooks(app, deps) {
     state,
     auth, // buildAuth(env)
     db,
+    eventEngine,
     broadcastState,
     updateUser,
     recordEvent,
@@ -241,6 +242,7 @@ export function registerWebhooks(app, deps) {
       state,
       env,
       db,
+      eventEngine,
       auth,
       updateUser,
       recordEvent,

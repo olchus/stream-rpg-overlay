@@ -85,7 +85,7 @@ function extractGoalTotalPln(body, env) {
 }
 
 export function registerTipplyWebhook(app, deps) {
-  const { env, state, broadcastState, updateUser, recordEvent, getLeaderboards, getPhaseWinners } = deps;
+  const { env, state, eventEngine, broadcastState, updateUser, recordEvent, getLeaderboards, getPhaseWinners } = deps;
 
   const enabled = String(env.TIPPLY_WEBHOOK_ENABLED || "true").toLowerCase() === "true";
   if (!enabled) return;
@@ -127,7 +127,9 @@ export function registerTipplyWebhook(app, deps) {
     }
 
     const pln = amount.amountPln;
-    const dmg = Math.floor(pln) * donateMult;
+    const dmgBase = Math.floor(pln) * donateMult;
+    const eventMult = eventEngine?.computeBossDamageMultiplier?.({ command: "system" })?.mult ?? 1;
+    const dmg = Math.max(0, Math.round(dmgBase * eventMult));
     if (dmg <= 0) {
       return res.json({ ok: true, ignored: true, reason: "amount_lt_1" });
     }
@@ -135,7 +137,7 @@ export function registerTipplyWebhook(app, deps) {
     const who = extractPayer(body, env);
 
     updateUser(who, 20 + Math.min(100, dmg / 10));
-    recordEvent(who, "donation_hit", dmg, JSON.stringify({ amountPln: pln, source }));
+    recordEvent(who, "donation_hit", dmg, JSON.stringify({ amountPln: pln, source, eventMult }));
     const result = applyDamage(state, who, dmg, "tipply_donation");
     if (result.defeated) {
       state.phaseWinners = getPhaseWinners(state.phaseStartMs);
@@ -152,7 +154,7 @@ export function registerTipplyWebhook(app, deps) {
 }
 
 export function startTipplyGoalPoller(deps) {
-  const { env, state, broadcastState, updateUser, recordEvent, getLeaderboards, getPhaseWinners } = deps;
+  const { env, state, eventEngine, broadcastState, updateUser, recordEvent, getLeaderboards, getPhaseWinners } = deps;
 
   const enabled = String(env.TIPPLY_GOAL_ENABLED || "false").toLowerCase() === "true";
   const url = env.TIPPLY_GOAL_API_URL || "";
@@ -208,7 +210,9 @@ export function startTipplyGoalPoller(deps) {
         return;
       }
 
-      const dmg = Math.floor(delta) * donateMult;
+      const dmgBase = Math.floor(delta) * donateMult;
+      const eventMult = eventEngine?.computeBossDamageMultiplier?.({ command: "system" })?.mult ?? 1;
+      const dmg = Math.max(0, Math.round(dmgBase * eventMult));
       if (dmg <= 0) {
         lastTotalPln = total.totalPln;
         return;
@@ -217,7 +221,7 @@ export function startTipplyGoalPoller(deps) {
       lastTotalPln = total.totalPln;
 
       updateUser(actor, 20 + Math.min(100, dmg / 10));
-      recordEvent(actor, "donation_hit", dmg, JSON.stringify({ amountPln: delta, source: "tipply_goal" }));
+      recordEvent(actor, "donation_hit", dmg, JSON.stringify({ amountPln: delta, source: "tipply_goal", eventMult }));
       const result = applyDamage(state, actor, dmg, "tipply_goal");
       if (result.defeated) {
         state.phaseWinners = getPhaseWinners(state.phaseStartMs);

@@ -23,7 +23,9 @@ export function initDb() {
       skill INTEGER NOT NULL DEFAULT ${SKILL_START_DEFAULT},
       skill_tries INTEGER NOT NULL DEFAULT 0,
       last_attack_ms INTEGER NOT NULL DEFAULT 0,
-      last_heal_ms INTEGER NOT NULL DEFAULT 0
+      last_heal_ms INTEGER NOT NULL DEFAULT 0,
+      last_ue_ms INTEGER NOT NULL DEFAULT 0,
+      last_offensive_ms INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS events (
@@ -59,21 +61,29 @@ export function initDb() {
   if (!userColumns.includes("skill_tries")) {
     db.exec("ALTER TABLE users ADD COLUMN skill_tries INTEGER NOT NULL DEFAULT 0;");
   }
+  if (!userColumns.includes("last_ue_ms")) {
+    db.exec("ALTER TABLE users ADD COLUMN last_ue_ms INTEGER NOT NULL DEFAULT 0;");
+  }
+  if (!userColumns.includes("last_offensive_ms")) {
+    db.exec("ALTER TABLE users ADD COLUMN last_offensive_ms INTEGER NOT NULL DEFAULT 0;");
+  }
 
   const upsertUser = db.prepare(`
-    INSERT INTO users (username, xp, level, skill, skill_tries, last_attack_ms, last_heal_ms)
-    VALUES (@username, @xp, @level, @skill, @skill_tries, @last_attack_ms, @last_heal_ms)
+    INSERT INTO users (username, xp, level, skill, skill_tries, last_attack_ms, last_heal_ms, last_ue_ms, last_offensive_ms)
+    VALUES (@username, @xp, @level, @skill, @skill_tries, @last_attack_ms, @last_heal_ms, @last_ue_ms, @last_offensive_ms)
     ON CONFLICT(username) DO UPDATE SET
       xp=excluded.xp,
       level=excluded.level,
       skill=excluded.skill,
       skill_tries=excluded.skill_tries,
       last_attack_ms=excluded.last_attack_ms,
-      last_heal_ms=excluded.last_heal_ms
+      last_heal_ms=excluded.last_heal_ms,
+      last_ue_ms=excluded.last_ue_ms,
+      last_offensive_ms=excluded.last_offensive_ms
   `);
 
   const getUser = db.prepare(`
-    SELECT username, xp, level, skill, skill_tries, last_attack_ms, last_heal_ms
+    SELECT username, xp, level, skill, skill_tries, last_attack_ms, last_heal_ms, last_ue_ms, last_offensive_ms
     FROM users
     WHERE username=?
   `);
@@ -94,7 +104,7 @@ export function initDb() {
   const topHittersToday = db.prepare(`
     SELECT username, SUM(amount) AS dmg
     FROM events
-    WHERE kind IN ('chat_attack','sub_hit','donation_hit','follow_hit','kick_gift')
+    WHERE kind IN ('chat_attack','chat_ue','chat_heal_roleswap_dmg','sub_hit','donation_hit','follow_hit','kick_gift')
       AND ts_ms >= ?
     GROUP BY username
     ORDER BY dmg DESC
@@ -104,7 +114,7 @@ export function initDb() {
   const topHittersInRange = db.prepare(`
     SELECT username, SUM(amount) AS dmg
     FROM events
-    WHERE kind IN ('chat_attack','sub_hit','donation_hit','follow_hit','kick_gift')
+    WHERE kind IN ('chat_attack','chat_ue','chat_heal_roleswap_dmg','sub_hit','donation_hit','follow_hit','kick_gift')
       AND ts_ms >= ? AND ts_ms <= ?
     GROUP BY username
     ORDER BY dmg DESC
@@ -140,7 +150,7 @@ export function initDb() {
       u.skill_tries,
       COALESCE(SUM(
         CASE
-          WHEN e.kind IN ('chat_attack','sub_hit','donation_hit','follow_hit','kick_gift')
+          WHEN e.kind IN ('chat_attack','chat_ue','chat_heal_roleswap_dmg','sub_hit','donation_hit','follow_hit','kick_gift')
             THEN e.amount
           ELSE 0
         END
